@@ -1,0 +1,199 @@
+{{ define "layout" }}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ReadThis</title>
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #1b1b16;
+        --muted: #6b6256;
+        --accent: #c85b2a;
+        --accent-2: #1f5e5a;
+        --paper: #fbf6ef;
+        --paper-2: #f1e7dc;
+        --shadow: rgba(27, 27, 22, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Charter", "Iowan Old Style", "Palatino", serif;
+        color: var(--ink);
+        background: radial-gradient(circle at top left, #fff3e0, var(--paper))
+          fixed;
+      }
+
+      .page {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 48px 20px 64px;
+        display: grid;
+        gap: 24px;
+      }
+
+      header {
+        display: grid;
+        gap: 12px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 2.6rem;
+        letter-spacing: 0.02em;
+      }
+
+      .lede {
+        color: var(--muted);
+        font-size: 1.05rem;
+      }
+
+      nav {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+
+      nav a {
+        text-decoration: none;
+        color: var(--accent-2);
+        border-bottom: 2px solid transparent;
+        padding-bottom: 2px;
+      }
+
+      nav a.active {
+        color: var(--accent);
+        border-color: var(--accent);
+      }
+
+      .panel {
+        background: linear-gradient(120deg, var(--paper), var(--paper-2));
+        border-radius: 18px;
+        padding: 24px;
+        box-shadow: 0 12px 30px var(--shadow);
+      }
+
+      form {
+        display: grid;
+        gap: 12px;
+      }
+
+      label {
+        font-size: 0.95rem;
+        color: var(--muted);
+      }
+
+      input[type="url"] {
+        padding: 12px 14px;
+        border: 1px solid #d8cbbb;
+        border-radius: 12px;
+        font-size: 1rem;
+        font-family: inherit;
+        background: white;
+      }
+
+      button {
+        align-self: start;
+        padding: 10px 18px;
+        border: none;
+        border-radius: 999px;
+        background: var(--accent);
+        color: white;
+        font-size: 0.95rem;
+        cursor: pointer;
+        transition: transform 120ms ease, box-shadow 120ms ease;
+      }
+
+      button.secondary {
+        background: var(--accent-2);
+      }
+
+      button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 8px 16px var(--shadow);
+      }
+
+      .toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+
+      .toolbar a {
+        color: var(--accent-2);
+        text-decoration: none;
+      }
+
+      ul.links {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: grid;
+        gap: 12px;
+      }
+
+      .link-item {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 12px;
+        align-items: center;
+        padding: 16px;
+        background: rgba(255, 255, 255, 0.8);
+        border-radius: 14px;
+        border: 1px solid #eadfd2;
+      }
+
+      .link-meta {
+        display: grid;
+        gap: 6px;
+      }
+
+      .link-meta a {
+        color: var(--ink);
+        text-decoration: none;
+        font-weight: 600;
+      }
+
+      .link-meta a:hover {
+        color: var(--accent);
+      }
+
+      .days-ago {
+        color: var(--muted);
+        font-size: 0.85rem;
+      }
+
+      .empty {
+        text-align: center;
+        color: var(--muted);
+        padding: 24px;
+      }
+
+      @media (max-width: 640px) {
+        h1 {
+          font-size: 2rem;
+        }
+
+        .link-item {
+          grid-template-columns: 1fr;
+          text-align: left;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      {{ template "content" . }}
+    </div>
+  </body>
+</html>
+{{ end }}

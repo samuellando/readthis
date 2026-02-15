@@ -14,6 +14,7 @@ import (
 	"readthis/internal/config"
 	"readthis/internal/httpapi"
 	"readthis/internal/storage"
+	"readthis/internal/webui"
 )
 
 // shutdownTimeout limits graceful shutdown duration.
@@ -31,14 +32,14 @@ func main() {
 
 	store := storage.NewFileStore(cfg.DataPath)
 	api := httpapi.New(store)
+	ui, err := webui.New(store, time.Now)
+	if err != nil {
+		log.Fatalf("readthis: failed to load templates: %v", err)
+	}
 
 	mux := http.NewServeMux()
 	mux.Handle("/api/", api.Handler())
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ReadThis server running"))
-	})
+	mux.Handle("/", ui.Handler())
 
 	server := &http.Server{
 		Addr:              cfg.Addr,

@@ -4,9 +4,10 @@ package config
 import "os"
 
 const (
+	// defaultDataPath is the default JSON storage location.
 	defaultDataPath = "./data/links.json"
-	defaultAddr     = ":8080"
-
+	defaultAddr = ":8080"
+	// dataPathEnv overrides the default data path.
 	dataPathEnv = "READTHIS_DATA_PATH"
 )
 
