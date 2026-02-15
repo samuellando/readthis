@@ -1,3 +1,4 @@
+// Command readthis starts the ReadThis HTTP server.
 package main
 
 import (
@@ -11,8 +12,11 @@ import (
 	"time"
 
 	"readthis/internal/config"
+	"readthis/internal/httpapi"
+	"readthis/internal/storage"
 )
 
+// shutdownTimeout limits graceful shutdown duration.
 const shutdownTimeout = 10 * time.Second
 
 func main() {
@@ -25,7 +29,11 @@ func main() {
 	cfg.Addr = *addr
 	cfg.DataPath = *dataPath
 
+	store := storage.NewFileStore(cfg.DataPath)
+	api := httpapi.New(store)
+
 	mux := http.NewServeMux()
+	mux.Handle("/api/", api.Handler())
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusOK)

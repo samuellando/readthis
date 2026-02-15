@@ -8,6 +8,7 @@ import (
 )
 
 func TestFileStoreCreateAndListOrder(t *testing.T) {
+	// Verifies create and ordering behavior for newest/oldest sorting.
 	store := NewFileStore(filepath.Join(t.TempDir(), "links.json"))
 
 	firstTime := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
@@ -43,6 +44,7 @@ func TestFileStoreCreateAndListOrder(t *testing.T) {
 }
 
 func TestFileStoreArchiveAndUnarchive(t *testing.T) {
+	// Verifies archive/unarchive updates and archived filtering.
 	store := NewFileStore(filepath.Join(t.TempDir(), "links.json"))
 
 	created, err := store.Create("https://example.com/archive", time.Now())
@@ -89,6 +91,7 @@ func TestFileStoreArchiveAndUnarchive(t *testing.T) {
 }
 
 func TestFileStorePersistsToDisk(t *testing.T) {
+	// Ensures data is saved and reloadable from disk.
 	path := filepath.Join(t.TempDir(), "links.json")
 	store := NewFileStore(path)
 
@@ -108,6 +111,7 @@ func TestFileStorePersistsToDisk(t *testing.T) {
 }
 
 func TestFileStoreConcurrentCreates(t *testing.T) {
+	// Ensures concurrent creates do not corrupt data.
 	store := NewFileStore(filepath.Join(t.TempDir(), "links.json"))
 	base := time.Date(2024, 1, 1, 10, 0, 0, 0, time.UTC)
 

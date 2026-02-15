@@ -13,12 +13,14 @@ import (
 	"github.com/google/uuid"
 )
 
+// FileStore persists links to a JSON file with locking for safety.
 type FileStore struct {
 	path     string
 	lockPath string
 	mu       sync.Mutex
 }
 
+// NewFileStore initializes a file-backed store at the provided path.
 func NewFileStore(path string) *FileStore {
 	return &FileStore{
 		path:     path,
@@ -26,6 +28,7 @@ func NewFileStore(path string) *FileStore {
 	}
 }
 
+// Create adds a new link with the provided URL and timestamp.
 func (s *FileStore) Create(url string, createdAt time.Time) (Link, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -54,6 +57,7 @@ func (s *FileStore) Create(url string, createdAt time.Time) (Link, error) {
 	return created, nil
 }
 
+// List returns links filtered by archived status and sorted by order.
 func (s *FileStore) List(order Order, archived bool) ([]Link, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -89,14 +93,17 @@ func (s *FileStore) List(order Order, archived bool) ([]Link, error) {
 	return links, nil
 }
 
+// Archive marks a link as archived.
 func (s *FileStore) Archive(id string) (Link, error) {
 	return s.setArchived(id, true)
 }
 
+// Unarchive marks a link as active.
 func (s *FileStore) Unarchive(id string) (Link, error) {
 	return s.setArchived(id, false)
 }
 
+// setArchived updates the archived flag for a link by ID.
 func (s *FileStore) setArchived(id string, archived bool) (Link, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -130,6 +137,7 @@ func (s *FileStore) setArchived(id string, archived bool) (Link, error) {
 	return updated, nil
 }
 
+// withFileLock executes a function while holding an OS file lock.
 func (s *FileStore) withFileLock(fn func() error) error {
 	if err := os.MkdirAll(filepath.Dir(s.path), 0755); err != nil {
 		return err
@@ -151,6 +159,7 @@ func (s *FileStore) withFileLock(fn func() error) error {
 	return fn()
 }
 
+// readLinks loads links from disk, returning empty when missing.
 func (s *FileStore) readLinks() ([]Link, error) {
 	data, err := os.ReadFile(s.path)
 	if err != nil {
@@ -172,6 +181,7 @@ func (s *FileStore) readLinks() ([]Link, error) {
 	return links, nil
 }
 
+// writeLinks atomically writes links to disk.
 func (s *FileStore) writeLinks(links []Link) error {
 	if err := os.MkdirAll(filepath.Dir(s.path), 0755); err != nil {
 		return err

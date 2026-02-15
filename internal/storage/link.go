@@ -1,3 +1,4 @@
+// Package storage provides file-backed persistence for links.
 package storage
 
 import (
@@ -5,8 +6,10 @@ import (
 	"time"
 )
 
+// ErrNotFound indicates a requested link does not exist.
 var ErrNotFound = errors.New("link not found")
 
+// Order controls list sorting.
 type Order int
 
 const (
@@ -14,6 +17,7 @@ const (
 	OrderOldestFirst
 )
 
+// Link represents a saved URL.
 type Link struct {
 	ID        string    `json:"id"`
 	URL       string    `json:"url"`
