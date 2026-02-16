@@ -13,12 +13,18 @@ import (
 
 func TestCreateAndListLinks(t *testing.T) {
 	// Ensures API can create a link and list active links.
+	page := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte("<html><head><title>Example Page</title></head><body>Hello</body></html>"))
+	}))
+	defer page.Close()
+
 	store := storage.NewFileStore(filepath.Join(t.TempDir(), "links.json"))
 	api := New(store)
 	server := httptest.NewServer(api.Handler())
 	defer server.Close()
 
-	createBody := []byte(`{"url":"https://example.com"}`)
+	createBody := []byte(`{"url":"` + page.URL + `"}`)
 	resp, err := http.Post(server.URL+"/api/links", "application/json", bytes.NewReader(createBody))
 	if err != nil {
 		t.Fatalf("create request failed: %v", err)
@@ -46,14 +52,54 @@ func TestCreateAndListLinks(t *testing.T) {
 	}
 }
 
-func TestArchiveAndUnarchiveLink(t *testing.T) {
-	// Ensures API can archive and unarchive links, and list archived only.
+func TestCreateExtractsTitle(t *testing.T) {
+	// Ensures create extracts title from page content.
+	page := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte("<html><head><title>Example Page</title></head><body>Hello</body></html>"))
+	}))
+	defer page.Close()
+
 	store := storage.NewFileStore(filepath.Join(t.TempDir(), "links.json"))
 	api := New(store)
 	server := httptest.NewServer(api.Handler())
 	defer server.Close()
 
-	createBody := []byte(`{"url":"https://example.com"}`)
+	createBody := []byte(`{"url":"` + page.URL + `"}`)
+	resp, err := http.Post(server.URL+"/api/links", "application/json", bytes.NewReader(createBody))
+	if err != nil {
+		t.Fatalf("create request failed: %v", err)
+	}
+	if resp.StatusCode != http.StatusCreated {
+		resp.Body.Close()
+		t.Fatalf("expected status 201, got %d", resp.StatusCode)
+	}
+	var created storage.Link
+	if err := json.NewDecoder(resp.Body).Decode(&created); err != nil {
+		resp.Body.Close()
+		t.Fatalf("decode create response: %v", err)
+	}
+	resp.Body.Close()
+
+	if created.Title != "Example Page" {
+		t.Fatalf("expected extracted title, got %q", created.Title)
+	}
+}
+
+func TestArchiveAndUnarchiveLink(t *testing.T) {
+	// Ensures API can archive and unarchive links, and list archived only.
+	page := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte("<html><head><title>Archive Page</title></head><body>Hello</body></html>"))
+	}))
+	defer page.Close()
+
+	store := storage.NewFileStore(filepath.Join(t.TempDir(), "links.json"))
+	api := New(store)
+	server := httptest.NewServer(api.Handler())
+	defer server.Close()
+
+	createBody := []byte(`{"url":"` + page.URL + `"}`)
 	resp, err := http.Post(server.URL+"/api/links", "application/json", bytes.NewReader(createBody))
 	if err != nil {
 		t.Fatalf("create request failed: %v", err)

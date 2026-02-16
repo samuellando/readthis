@@ -4,11 +4,13 @@ package httpapi
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"strings"
 	"time"
 
 	"readthis/internal/storage"
+	"readthis/internal/title"
 )
 
 // API provides HTTP handlers backed by a storage layer.
@@ -55,8 +57,18 @@ func (api *API) handleCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	created, err := api.store.Create(payload.URL, time.Now().UTC())
+	linkTitle := storage.MissingTitle
+	if extracted, err := title.Fetch(r.Context(), payload.URL); err == nil {
+		linkTitle = extracted
+	} else {
+		log.Println(err)
+		writeError(w, http.StatusInternalServerError, "failed get link title")
+		return
+	}
+
+	created, err := api.store.Create(payload.URL, linkTitle, time.Now().UTC())
 	if err != nil {
+		log.Println(err)
 		writeError(w, http.StatusInternalServerError, "failed to create link")
 		return
 	}
@@ -91,6 +103,7 @@ func (api *API) handleList(w http.ResponseWriter, r *http.Request) {
 
 	links, err := api.store.List(order, archived)
 	if err != nil {
+		log.Println(err)
 		writeError(w, http.StatusInternalServerError, "failed to list links")
 		return
 	}
@@ -131,6 +144,7 @@ func (api *API) handleLinkAction(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "link not found")
 			return
 		}
+		log.Println(err)
 		writeError(w, http.StatusInternalServerError, "failed to update link")
 		return
 	}

@@ -14,11 +14,11 @@ func TestFileStoreCreateAndListOrder(t *testing.T) {
 	firstTime := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
 	secondTime := firstTime.Add(2 * time.Hour)
 
-	first, err := store.Create("https://example.com/first", firstTime)
+	first, err := store.Create("https://example.com/first", MissingTitle, firstTime)
 	if err != nil {
 		t.Fatalf("create first link: %v", err)
 	}
-	second, err := store.Create("https://example.com/second", secondTime)
+	second, err := store.Create("https://example.com/second", MissingTitle, secondTime)
 	if err != nil {
 		t.Fatalf("create second link: %v", err)
 	}
@@ -41,13 +41,40 @@ func TestFileStoreCreateAndListOrder(t *testing.T) {
 	if links[0].ID != first.ID || links[1].ID != second.ID {
 		t.Fatalf("unexpected order for oldest first")
 	}
+	if links[0].Title != MissingTitle || links[1].Title != MissingTitle {
+		t.Fatalf("expected missing title defaults")
+	}
+}
+
+func TestFileStoreCreatePreservesTitle(t *testing.T) {
+	// Ensures non-empty titles are preserved.
+	store := NewFileStore(filepath.Join(t.TempDir(), "links.json"))
+
+	created, err := store.Create("https://example.com/title", "Example Title", time.Now())
+	if err != nil {
+		t.Fatalf("create link: %v", err)
+	}
+	if created.Title != "Example Title" {
+		t.Fatalf("expected title to be preserved")
+	}
+
+	links, err := store.List(OrderNewestFirst, false)
+	if err != nil {
+		t.Fatalf("list links: %v", err)
+	}
+	if len(links) != 1 {
+		t.Fatalf("expected 1 link, got %d", len(links))
+	}
+	if links[0].Title != "Example Title" {
+		t.Fatalf("expected stored title to be preserved")
+	}
 }
 
 func TestFileStoreArchiveAndUnarchive(t *testing.T) {
 	// Verifies archive/unarchive updates and archived filtering.
 	store := NewFileStore(filepath.Join(t.TempDir(), "links.json"))
 
-	created, err := store.Create("https://example.com/archive", time.Now())
+	created, err := store.Create("https://example.com/archive", MissingTitle, time.Now())
 	if err != nil {
 		t.Fatalf("create link: %v", err)
 	}
@@ -95,7 +122,7 @@ func TestFileStorePersistsToDisk(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "links.json")
 	store := NewFileStore(path)
 
-	created, err := store.Create("https://example.com/persist", time.Now())
+	created, err := store.Create("https://example.com/persist", MissingTitle, time.Now())
 	if err != nil {
 		t.Fatalf("create link: %v", err)
 	}
@@ -121,7 +148,7 @@ func TestFileStoreConcurrentCreates(t *testing.T) {
 		index := i
 		go func() {
 			defer wg.Done()
-			_, err := store.Create("https://example.com/concurrent", base.Add(time.Duration(index)*time.Minute))
+			_, err := store.Create("https://example.com/concurrent", MissingTitle, base.Add(time.Duration(index)*time.Minute))
 			if err != nil {
 				t.Errorf("create link: %v", err)
 			}

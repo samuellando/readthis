@@ -28,8 +28,8 @@ func NewFileStore(path string) *FileStore {
 	}
 }
 
-// Create adds a new link with the provided URL and timestamp.
-func (s *FileStore) Create(url string, createdAt time.Time) (Link, error) {
+// Create adds a new link with the provided URL, title, and timestamp.
+func (s *FileStore) Create(url string, title string, createdAt time.Time) (Link, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -43,6 +43,7 @@ func (s *FileStore) Create(url string, createdAt time.Time) (Link, error) {
 		created = Link{
 			ID:        uuid.NewString(),
 			URL:       url,
+			Title:     title,
 			CreatedAt: createdAt,
 			Archived:  false,
 		}
@@ -176,6 +177,12 @@ func (s *FileStore) readLinks() ([]Link, error) {
 	var links []Link
 	if err := json.Unmarshal(data, &links); err != nil {
 		return nil, err
+	}
+
+	for i := range links {
+		if links[i].Title == "" {
+			links[i].Title = MissingTitle
+		}
 	}
 
 	return links, nil

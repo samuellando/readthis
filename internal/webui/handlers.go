@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"readthis/internal/storage"
+	"readthis/internal/title"
 )
 
 // pageData is the template data for list pages.
@@ -28,6 +29,7 @@ type pageData struct {
 type linkView struct {
 	ID       string
 	URL      string
+	Title    string
 	DaysAgo  string
 	Archived bool
 }
@@ -109,7 +111,14 @@ func (ui *UI) handleCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := ui.store.Create(url, ui.now().UTC()); err != nil {
+	linkTitle := storage.MissingTitle
+	if extracted, err := title.Fetch(r.Context(), url); err != nil {
+		log.Println(err)
+	} else {
+		linkTitle = extracted
+	}
+
+	if _, err := ui.store.Create(url, linkTitle, ui.now().UTC()); err != nil {
 		log.Println(err)
 		writeServerError(w, "failed to save link")
 		return
@@ -184,6 +193,7 @@ func (ui *UI) renderList(w http.ResponseWriter, r *http.Request, archived bool) 
 		view = append(view, linkView{
 			ID:       link.ID,
 			URL:      link.URL,
+			Title:    link.Title,
 			Archived: link.Archived,
 			DaysAgo:  formatDaysAgo(ui.now().UTC(), link.CreatedAt),
 		})
