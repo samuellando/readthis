@@ -46,7 +46,8 @@ func (api *API) handleLinks(w http.ResponseWriter, r *http.Request) {
 // handleCreate creates a new link.
 func (api *API) handleCreate(w http.ResponseWriter, r *http.Request) {
 	var payload struct {
-		URL string `json:"url"`
+		URL   string `json:"url"`
+		Title string `json:"title"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid json")
@@ -57,13 +58,14 @@ func (api *API) handleCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	linkTitle := storage.MissingTitle
-	if extracted, err := title.Fetch(r.Context(), payload.URL); err == nil {
-		linkTitle = extracted
-	} else {
-		log.Println(err)
-		writeError(w, http.StatusInternalServerError, "failed get link title")
-		return
+	linkTitle := strings.TrimSpace(payload.Title)
+	if linkTitle == "" {
+		linkTitle = storage.MissingTitle
+		if extracted, err := title.Fetch(r.Context(), payload.URL); err == nil && strings.TrimSpace(extracted) != "" {
+			linkTitle = extracted
+		} else if err != nil {
+			log.Println(err)
+		}
 	}
 
 	created, err := api.store.Create(payload.URL, linkTitle, time.Now().UTC())
