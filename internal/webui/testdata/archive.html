@@ -244,6 +244,7 @@
   </div>
   <div>
     <button class="secondary" hx-get="/links/UUID/title?mode=edit" hx-target="closest .link-item" hx-swap="outerHTML">Edit title</button>
+    <button class="secondary" hx-post="/links/UUID/delete" hx-confirm="Delete this link?" hx-target="closest .link-item" hx-swap="delete">Delete</button>
     
     <button class="secondary" hx-post="/links/UUID/unarchive" hx-target="closest .link-item" hx-swap="delete">Unarchive</button>
     

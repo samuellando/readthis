@@ -113,15 +113,30 @@ func (api *API) handleList(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, links)
 }
 
-// handleLinkAction archives or unarchives a link.
+// handleLinkAction archives, unarchives, or deletes a link.
 func (api *API) handleLinkAction(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/api/links/")
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+
+	if len(parts) == 1 && r.Method == http.MethodDelete {
+		linkID := parts[0]
+		if err := api.store.Delete(linkID); err != nil {
+			if errors.Is(err, storage.ErrNotFound) {
+				writeError(w, http.StatusNotFound, "link not found")
+				return
+			}
+			log.Println(err)
+			writeError(w, http.StatusInternalServerError, "failed to delete link")
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-
-	path := strings.TrimPrefix(r.URL.Path, "/api/links/")
-	parts := strings.Split(strings.Trim(path, "/"), "/")
 	if len(parts) != 2 {
 		writeError(w, http.StatusNotFound, "not found")
 		return

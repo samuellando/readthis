@@ -223,3 +223,25 @@ func TestFileStoreGet(t *testing.T) {
 		t.Fatalf("expected matching title")
 	}
 }
+
+func TestFileStoreDelete(t *testing.T) {
+	// Ensures Delete removes the link.
+	store := NewFileStore(filepath.Join(t.TempDir(), "links.json"))
+
+	created, err := store.Create("https://example.com/delete", "Delete Title", time.Now())
+	if err != nil {
+		t.Fatalf("create link: %v", err)
+	}
+
+	if err := store.Delete(created.ID); err != nil {
+		t.Fatalf("delete link: %v", err)
+	}
+
+	links, err := store.List(OrderNewestFirst, false)
+	if err != nil {
+		t.Fatalf("list links: %v", err)
+	}
+	if len(links) != 0 {
+		t.Fatalf("expected no links, got %d", len(links))
+	}
+}

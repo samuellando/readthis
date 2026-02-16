@@ -163,3 +163,35 @@ func TestUpdateTitle(t *testing.T) {
 		t.Fatalf("expected updated title, got %q", links[0].Title)
 	}
 }
+
+func TestDeleteLink(t *testing.T) {
+	// Ensures delete action removes the link.
+	now := time.Date(2024, 1, 3, 12, 0, 0, 0, time.UTC)
+	store := storage.NewFileStore(filepath.Join(t.TempDir(), "links.json"))
+	created, err := store.Create("https://example.com/delete", "Delete Title", now)
+	if err != nil {
+		t.Fatalf("create link: %v", err)
+	}
+
+	ui, err := New(store, func() time.Time { return now })
+	if err != nil {
+		t.Fatalf("new ui: %v", err)
+	}
+
+	server := httptest.NewServer(ui.Handler())
+	defer server.Close()
+
+	resp, err := http.Post(server.URL+"/links/"+created.ID+"/delete", "application/x-www-form-urlencoded", nil)
+	if err != nil {
+		t.Fatalf("delete link: %v", err)
+	}
+	resp.Body.Close()
+
+	links, err := store.List(storage.OrderNewestFirst, false)
+	if err != nil {
+		t.Fatalf("list links: %v", err)
+	}
+	if len(links) != 0 {
+		t.Fatalf("expected no links, got %d", len(links))
+	}
+}

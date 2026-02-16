@@ -167,6 +167,8 @@ func (ui *UI) handleAction(w http.ResponseWriter, r *http.Request) {
 		updated, err = ui.store.Archive(linkID)
 	case "unarchive":
 		updated, err = ui.store.Unarchive(linkID)
+	case "delete":
+		err = ui.store.Delete(linkID)
 	case "title":
 		if err := r.ParseForm(); err != nil {
 			log.Println(err)

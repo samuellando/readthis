@@ -105,6 +105,34 @@ func (s *FileStore) Unarchive(id string) (Link, error) {
 	return s.setArchived(id, false)
 }
 
+// Delete removes a link by ID.
+func (s *FileStore) Delete(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return s.withFileLock(func() error {
+		links, err := s.readLinks()
+		if err != nil {
+			return err
+		}
+
+		filtered := links[:0]
+		found := false
+		for _, link := range links {
+			if link.ID == id {
+				found = true
+				continue
+			}
+			filtered = append(filtered, link)
+		}
+		if !found {
+			return ErrNotFound
+		}
+
+		return s.writeLinks(filtered)
+	})
+}
+
 // Get returns a link by ID.
 func (s *FileStore) Get(id string) (Link, error) {
 	s.mu.Lock()

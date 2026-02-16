@@ -195,6 +195,68 @@ func TestArchiveAndUnarchiveLink(t *testing.T) {
 	}
 }
 
+func TestDeleteLink(t *testing.T) {
+	// Ensures API can delete a link.
+	page := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte("<html><head><title>Delete Page</title></head><body>Hello</body></html>"))
+	}))
+	defer page.Close()
+
+	store := storage.NewFileStore(filepath.Join(t.TempDir(), "links.json"))
+	api := New(store)
+	server := httptest.NewServer(api.Handler())
+	defer server.Close()
+
+	createBody := []byte(`{"url":"` + page.URL + `"}`)
+	resp, err := http.Post(server.URL+"/api/links", "application/json", bytes.NewReader(createBody))
+	if err != nil {
+		t.Fatalf("create request failed: %v", err)
+	}
+	if resp.StatusCode != http.StatusCreated {
+		resp.Body.Close()
+		t.Fatalf("expected status 201, got %d", resp.StatusCode)
+	}
+	var created storage.Link
+	if err := json.NewDecoder(resp.Body).Decode(&created); err != nil {
+		resp.Body.Close()
+		t.Fatalf("decode create response: %v", err)
+	}
+	resp.Body.Close()
+
+	deleteReq, err := http.NewRequest(http.MethodDelete, server.URL+"/api/links/"+created.ID, nil)
+	if err != nil {
+		t.Fatalf("build delete request: %v", err)
+	}
+	resp, err = http.DefaultClient.Do(deleteReq)
+	if err != nil {
+		t.Fatalf("delete request failed: %v", err)
+	}
+	if resp.StatusCode != http.StatusNoContent {
+		resp.Body.Close()
+		t.Fatalf("expected status 204, got %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	resp, err = http.Get(server.URL + "/api/links?archived=false&order=newest")
+	if err != nil {
+		t.Fatalf("list request failed: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+		t.Fatalf("expected status 200, got %d", resp.StatusCode)
+	}
+	var links []storage.Link
+	if err := json.NewDecoder(resp.Body).Decode(&links); err != nil {
+		resp.Body.Close()
+		t.Fatalf("decode list response: %v", err)
+	}
+	resp.Body.Close()
+	if len(links) != 0 {
+		t.Fatalf("expected no links, got %d", len(links))
+	}
+}
+
 func TestListValidation(t *testing.T) {
 	// Ensures invalid query parameters are rejected.
 	store := storage.NewFileStore(filepath.Join(t.TempDir(), "links.json"))
