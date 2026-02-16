@@ -38,10 +38,32 @@
     <div class="days-ago">{{ .DaysAgo }}</div>
   </div>
   <div>
+    <button class="secondary" hx-get="/links/{{ .ID }}/title?mode=edit" hx-target="closest .link-item" hx-swap="outerHTML">Edit title</button>
     {{ if .Archived }}
-    <button class="secondary" hx-post="/links/{{ .ID }}/unarchive" hx-target="closest .link-item" hx-swap="outerHTML">Unarchive</button>
+    <button class="secondary" hx-post="/links/{{ .ID }}/unarchive" hx-target="closest .link-item" hx-swap="delete">Unarchive</button>
     {{ else }}
-    <button hx-post="/links/{{ .ID }}/archive" hx-target="closest .link-item" hx-swap="outerHTML">Archive</button>
+    <button hx-post="/links/{{ .ID }}/archive" hx-target="closest .link-item" hx-swap="delete">Archive</button>
+    {{ end }}
+  </div>
+</li>
+{{ end }}
+
+{{ define "item-edit" }}
+<li class="link-item" data-id="{{ .ID }}">
+  <div class="link-meta">
+    <a href="{{ .URL }}" target="_blank" rel="noreferrer">{{ .Title }}</a>
+    <div class="days-ago">{{ .DaysAgo }}</div>
+    <form class="title-form" method="post" action="/links/{{ .ID }}/title">
+      <input name="title" type="text" value="{{ .Title }}" aria-label="Title">
+      <button class="secondary" type="submit">Save</button>
+      <button class="secondary" hx-get="/links/{{ .ID }}/title?mode=view" hx-target="closest .link-item" hx-swap="outerHTML" formnovalidate>Cancel</button>
+    </form>
+  </div>
+  <div>
+    {{ if .Archived }}
+    <button class="secondary" hx-post="/links/{{ .ID }}/unarchive" hx-target="closest .link-item" hx-swap="delete">Unarchive</button>
+    {{ else }}
+    <button hx-post="/links/{{ .ID }}/archive" hx-target="closest .link-item" hx-swap="delete">Archive</button>
     {{ end }}
   </div>
 </li>

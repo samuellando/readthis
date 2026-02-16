@@ -127,3 +127,39 @@ func TestArchiveLink(t *testing.T) {
 		t.Fatalf("expected archived link")
 	}
 }
+
+func TestUpdateTitle(t *testing.T) {
+	// Ensures title edit updates the stored link.
+	now := time.Date(2024, 1, 3, 12, 0, 0, 0, time.UTC)
+	store := storage.NewFileStore(filepath.Join(t.TempDir(), "links.json"))
+	created, err := store.Create("https://example.com/title", "Old Title", now)
+	if err != nil {
+		t.Fatalf("create link: %v", err)
+	}
+
+	ui, err := New(store, func() time.Time { return now })
+	if err != nil {
+		t.Fatalf("new ui: %v", err)
+	}
+
+	server := httptest.NewServer(ui.Handler())
+	defer server.Close()
+
+	form := "title=New+Title"
+	resp, err := http.Post(server.URL+"/links/"+created.ID+"/title", "application/x-www-form-urlencoded", strings.NewReader(form))
+	if err != nil {
+		t.Fatalf("update title: %v", err)
+	}
+	resp.Body.Close()
+
+	links, err := store.List(storage.OrderNewestFirst, false)
+	if err != nil {
+		t.Fatalf("list links: %v", err)
+	}
+	if len(links) != 1 {
+		t.Fatalf("expected 1 link, got %d", len(links))
+	}
+	if links[0].Title != "New Title" {
+		t.Fatalf("expected updated title, got %q", links[0].Title)
+	}
+}

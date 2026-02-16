@@ -173,3 +173,53 @@ func TestFileStoreConcurrentCreates(t *testing.T) {
 		t.Fatalf("expected 20 links, got %d", len(links))
 	}
 }
+
+func TestFileStoreUpdateTitle(t *testing.T) {
+	// Ensures title updates persist.
+	store := NewFileStore(filepath.Join(t.TempDir(), "links.json"))
+
+	created, err := store.Create("https://example.com/update", "Old Title", time.Now())
+	if err != nil {
+		t.Fatalf("create link: %v", err)
+	}
+
+	updated, err := store.UpdateTitle(created.ID, "New Title")
+	if err != nil {
+		t.Fatalf("update title: %v", err)
+	}
+	if updated.Title != "New Title" {
+		t.Fatalf("expected updated title")
+	}
+
+	links, err := store.List(OrderNewestFirst, false)
+	if err != nil {
+		t.Fatalf("list links: %v", err)
+	}
+	if len(links) != 1 {
+		t.Fatalf("expected 1 link, got %d", len(links))
+	}
+	if links[0].Title != "New Title" {
+		t.Fatalf("expected stored title to update")
+	}
+}
+
+func TestFileStoreGet(t *testing.T) {
+	// Ensures Get returns the stored link by ID.
+	store := NewFileStore(filepath.Join(t.TempDir(), "links.json"))
+
+	created, err := store.Create("https://example.com/get", "Get Title", time.Now())
+	if err != nil {
+		t.Fatalf("create link: %v", err)
+	}
+
+	fetched, err := store.Get(created.ID)
+	if err != nil {
+		t.Fatalf("get link: %v", err)
+	}
+	if fetched.ID != created.ID {
+		t.Fatalf("expected matching id")
+	}
+	if fetched.Title != "Get Title" {
+		t.Fatalf("expected matching title")
+	}
+}

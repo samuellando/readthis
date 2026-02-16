@@ -129,11 +129,6 @@ func (ui *UI) handleCreate(w http.ResponseWriter, r *http.Request) {
 
 // handleAction archives or unarchives a link.
 func (ui *UI) handleAction(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeMethodNotAllowed(w)
-		return
-	}
-
 	clean := strings.TrimPrefix(r.URL.Path, "/links/")
 	clean = strings.Trim(clean, "/")
 	parts := strings.Split(clean, "/")
@@ -144,16 +139,45 @@ func (ui *UI) handleAction(w http.ResponseWriter, r *http.Request) {
 	linkID := parts[0]
 	action := parts[1]
 
-	if action != "archive" && action != "unarchive" {
-		writeNotFound(w)
+	if r.Method == http.MethodGet && action == "title" {
+		link, err := ui.store.Get(linkID)
+		if err != nil {
+			if errors.Is(err, storage.ErrNotFound) {
+				writeNotFound(w)
+				return
+			}
+			log.Println(err)
+			writeServerError(w, "failed to load link")
+			return
+		}
+		mode := r.URL.Query().Get("mode")
+		ui.renderItem(w, link, mode != "view")
 		return
 	}
 
+	if r.Method != http.MethodPost {
+		writeMethodNotAllowed(w)
+		return
+	}
+
+	var updated storage.Link
 	var err error
-	if action == "archive" {
-		_, err = ui.store.Archive(linkID)
-	} else {
-		_, err = ui.store.Unarchive(linkID)
+	switch action {
+	case "archive":
+		updated, err = ui.store.Archive(linkID)
+	case "unarchive":
+		updated, err = ui.store.Unarchive(linkID)
+	case "title":
+		if err := r.ParseForm(); err != nil {
+			log.Println(err)
+			writeBadRequest(w, "invalid form")
+			return
+		}
+		newTitle := strings.TrimSpace(r.FormValue("title"))
+		updated, err = ui.store.UpdateTitle(linkID, newTitle)
+	default:
+		writeNotFound(w)
+		return
 	}
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
@@ -166,6 +190,10 @@ func (ui *UI) handleAction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if isHTMX(r) {
+		if action == "title" {
+			ui.renderItem(w, updated, false)
+			return
+		}
 		w.WriteHeader(http.StatusOK)
 		return
 	}
@@ -217,6 +245,32 @@ func (ui *UI) renderList(w http.ResponseWriter, r *http.Request, archived bool) 
 	if err := ui.tpl.ExecuteTemplate(&buf, "layout", data); err != nil {
 		log.Println(err)
 		writeServerError(w, "failed to render page")
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = w.Write(buf.Bytes())
+}
+
+// renderItem renders a single link item in view or edit mode.
+func (ui *UI) renderItem(w http.ResponseWriter, link storage.Link, edit bool) {
+	view := linkView{
+		ID:       link.ID,
+		URL:      link.URL,
+		Title:    link.Title,
+		Archived: link.Archived,
+		DaysAgo:  formatDaysAgo(ui.now().UTC(), link.CreatedAt),
+	}
+
+	templateName := "item"
+	if edit {
+		templateName = "item-edit"
+	}
+
+	var buf bytes.Buffer
+	if err := ui.tpl.ExecuteTemplate(&buf, templateName, view); err != nil {
+		log.Println(err)
+		writeServerError(w, "failed to render item")
 		return
 	}
 

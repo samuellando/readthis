@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -102,6 +103,73 @@ func (s *FileStore) Archive(id string) (Link, error) {
 // Unarchive marks a link as active.
 func (s *FileStore) Unarchive(id string) (Link, error) {
 	return s.setArchived(id, false)
+}
+
+// Get returns a link by ID.
+func (s *FileStore) Get(id string) (Link, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var found Link
+	err := s.withFileLock(func() error {
+		links, err := s.readLinks()
+		if err != nil {
+			return err
+		}
+
+		for _, link := range links {
+			if link.ID == id {
+				found = link
+				return nil
+			}
+		}
+
+		return ErrNotFound
+	})
+	if err != nil {
+		return Link{}, err
+	}
+
+	return found, nil
+}
+
+// UpdateTitle updates the title for a link by ID.
+func (s *FileStore) UpdateTitle(id string, title string) (Link, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	cleanTitle := strings.TrimSpace(title)
+	if cleanTitle == "" {
+		cleanTitle = MissingTitle
+	}
+
+	var updated Link
+	err := s.withFileLock(func() error {
+		links, err := s.readLinks()
+		if err != nil {
+			return err
+		}
+
+		found := false
+		for i := range links {
+			if links[i].ID == id {
+				links[i].Title = cleanTitle
+				updated = links[i]
+				found = true
+				break
+			}
+		}
+		if !found {
+			return ErrNotFound
+		}
+
+		return s.writeLinks(links)
+	})
+	if err != nil {
+		return Link{}, err
+	}
+
+	return updated, nil
 }
 
 // setArchived updates the archived flag for a link by ID.
