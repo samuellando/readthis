@@ -27,11 +27,13 @@ type pageData struct {
 
 // linkView is the template-ready representation of a link.
 type linkView struct {
-	ID       string
-	URL      string
-	Title    string
-	DaysAgo  string
-	Archived bool
+	ID               string
+	URL              string
+	Title            string
+	DaysAgo          string
+	Archived         bool
+	RevisitAt        *time.Time
+	DaysUntilRevisit string
 }
 
 // templatesFS embeds the HTML templates.
@@ -177,6 +179,19 @@ func (ui *UI) handleAction(w http.ResponseWriter, r *http.Request) {
 		}
 		newTitle := strings.TrimSpace(r.FormValue("title"))
 		updated, err = ui.store.UpdateTitle(linkID, newTitle)
+	case "revisit":
+		if err := r.ParseForm(); err != nil {
+			log.Println(err)
+			writeBadRequest(w, "invalid form")
+			return
+		}
+		duration := r.FormValue("duration")
+		revisitAt, err := parseDuration(duration, ui.now)
+		if err != nil {
+			writeBadRequest(w, "invalid duration")
+			return
+		}
+		updated, err = ui.store.SetRevisitAt(linkID, revisitAt)
 	default:
 		writeNotFound(w)
 		return
@@ -220,13 +235,18 @@ func (ui *UI) renderList(w http.ResponseWriter, r *http.Request, archived bool) 
 
 	view := make([]linkView, 0, len(links))
 	for _, link := range links {
-		view = append(view, linkView{
+		v := linkView{
 			ID:       link.ID,
 			URL:      link.URL,
 			Title:    link.Title,
 			Archived: link.Archived,
 			DaysAgo:  formatDaysAgo(ui.now().UTC(), link.CreatedAt),
-		})
+		}
+		if link.RevisitAt != nil {
+			v.RevisitAt = link.RevisitAt
+			v.DaysUntilRevisit = formatDaysUntil(ui.now().UTC(), *link.RevisitAt)
+		}
+		view = append(view, v)
 	}
 
 	label := "newest"
@@ -256,12 +276,17 @@ func (ui *UI) renderList(w http.ResponseWriter, r *http.Request, archived bool) 
 
 // renderItem renders a single link item in view or edit mode.
 func (ui *UI) renderItem(w http.ResponseWriter, link storage.Link, edit bool) {
+	now := ui.now().UTC()
 	view := linkView{
 		ID:       link.ID,
 		URL:      link.URL,
 		Title:    link.Title,
 		Archived: link.Archived,
-		DaysAgo:  formatDaysAgo(ui.now().UTC(), link.CreatedAt),
+		DaysAgo:  formatDaysAgo(now, link.CreatedAt),
+	}
+	if link.RevisitAt != nil {
+		view.RevisitAt = link.RevisitAt
+		view.DaysUntilRevisit = formatDaysUntil(now, *link.RevisitAt)
 	}
 
 	templateName := "item"
@@ -293,6 +318,39 @@ func formatDaysAgo(now time.Time, created time.Time) string {
 		return "1 day ago"
 	}
 	return "" + strconv.Itoa(days) + " days ago"
+}
+
+// parseDuration parses a duration string (day, week, month, year) into a time.Time.
+func parseDuration(duration string, now func() time.Time) (time.Time, error) {
+	var t time.Time
+	switch duration {
+	case "day":
+		t = now().AddDate(0, 0, 1)
+	case "week":
+		t = now().AddDate(0, 0, 7)
+	case "month":
+		t = now().AddDate(0, 1, 0)
+	case "year":
+		t = now().AddDate(1, 0, 0)
+	default:
+		return time.Time{}, errors.New("invalid duration")
+	}
+	return t, nil
+}
+
+// formatDaysUntil turns a future timestamp into days until label.
+func formatDaysUntil(now time.Time, revisitAt time.Time) string {
+	if revisitAt.Before(now) || revisitAt.Equal(now) {
+		return "now"
+	}
+	days := int(revisitAt.Sub(now).Hours() / 24)
+	if days == 0 {
+		return "less than a day"
+	}
+	if days == 1 {
+		return "1 day"
+	}
+	return "" + strconv.Itoa(days) + " days"
 }
 
 // buildOrderURL builds the URL for the order toggle link.

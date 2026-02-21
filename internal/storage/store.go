@@ -71,6 +71,21 @@ func (s *FileStore) List(order Order, archived bool) ([]Link, error) {
 			return err
 		}
 		links = loaded
+
+		now := time.Now()
+		modified := false
+		for i := range links {
+			if links[i].Archived && links[i].RevisitAt != nil && !links[i].RevisitAt.After(now) {
+				links[i].Archived = false
+				links[i].RevisitAt = nil
+				modified = true
+			}
+		}
+		if modified {
+			if err := s.writeLinks(links); err != nil {
+				return err
+			}
+		}
 		return nil
 	})
 	if err != nil {
@@ -212,10 +227,49 @@ func (s *FileStore) setArchived(id string, archived bool) (Link, error) {
 			return err
 		}
 
+		now := time.Now()
 		found := false
 		for i := range links {
 			if links[i].ID == id {
 				links[i].Archived = archived
+				if archived && links[i].RevisitAt != nil && !links[i].RevisitAt.After(now) {
+					links[i].RevisitAt = nil
+				}
+				updated = links[i]
+				found = true
+				break
+			}
+		}
+		if !found {
+			return ErrNotFound
+		}
+
+		return s.writeLinks(links)
+	})
+	if err != nil {
+		return Link{}, err
+	}
+
+	return updated, nil
+}
+
+// SetRevisitAt sets the revisit time for a link and archives it.
+func (s *FileStore) SetRevisitAt(id string, revisitAt time.Time) (Link, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var updated Link
+	err := s.withFileLock(func() error {
+		links, err := s.readLinks()
+		if err != nil {
+			return err
+		}
+
+		found := false
+		for i := range links {
+			if links[i].ID == id {
+				links[i].RevisitAt = &revisitAt
+				links[i].Archived = true
 				updated = links[i]
 				found = true
 				break

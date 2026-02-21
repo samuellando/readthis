@@ -35,15 +35,38 @@
 <li class="link-item" data-id="{{ .ID }}">
   <div class="link-meta">
     <a href="{{ .URL }}" target="_blank" rel="noreferrer">{{ .Title }}</a>
-    <div class="days-ago">{{ .DaysAgo }}</div>
+    <div class="days-ago">{{ .DaysAgo }}{{ if and .DaysUntilRevisit (ne .DaysUntilRevisit "now") }} · revisit in {{ .DaysUntilRevisit }}{{ else if eq .DaysUntilRevisit "now" }} · revisiting{{ end }}</div>
   </div>
   <div>
+    {{ if not .Archived }}
     <button class="secondary" hx-get="/links/{{ .ID }}/title?mode=edit" hx-target="closest .link-item" hx-swap="outerHTML">Edit title</button>
+    {{ end }}
     <button class="secondary" hx-post="/links/{{ .ID }}/delete" hx-confirm="Delete this link?" hx-target="closest .link-item" hx-swap="delete">Delete</button>
     {{ if .Archived }}
     <button class="secondary" hx-post="/links/{{ .ID }}/unarchive" hx-target="closest .link-item" hx-swap="delete">Unarchive</button>
     {{ else }}
     <button hx-post="/links/{{ .ID }}/archive" hx-target="closest .link-item" hx-swap="delete">Archive</button>
+    <div class="dropdown">
+      <button class="secondary dropdown-toggle">Revisit ▾</button>
+      <div class="dropdown-menu">
+        <form method="post" action="/links/{{ .ID }}/revisit">
+          <input type="hidden" name="duration" value="day">
+          <button type="submit">In a day</button>
+        </form>
+        <form method="post" action="/links/{{ .ID }}/revisit">
+          <input type="hidden" name="duration" value="week">
+          <button type="submit">In a week</button>
+        </form>
+        <form method="post" action="/links/{{ .ID }}/revisit">
+          <input type="hidden" name="duration" value="month">
+          <button type="submit">In a month</button>
+        </form>
+        <form method="post" action="/links/{{ .ID }}/revisit">
+          <input type="hidden" name="duration" value="year">
+          <button type="submit">In a year</button>
+        </form>
+      </div>
+    </div>
     {{ end }}
   </div>
 </li>
@@ -53,7 +76,7 @@
 <li class="link-item" data-id="{{ .ID }}">
   <div class="link-meta">
     <a href="{{ .URL }}" target="_blank" rel="noreferrer">{{ .Title }}</a>
-    <div class="days-ago">{{ .DaysAgo }}</div>
+    <div class="days-ago">{{ .DaysAgo }}{{ if and .DaysUntilRevisit (ne .DaysUntilRevisit "now") }} · revisit in {{ .DaysUntilRevisit }}{{ else if eq .DaysUntilRevisit "now" }} · revisiting{{ end }}</div>
     <form class="title-form" method="post" action="/links/{{ .ID }}/title">
       <input name="title" type="text" value="{{ .Title }}" aria-label="Title">
       <button class="secondary" type="submit">Save</button>
@@ -66,6 +89,27 @@
     <button class="secondary" hx-post="/links/{{ .ID }}/unarchive" hx-target="closest .link-item" hx-swap="delete">Unarchive</button>
     {{ else }}
     <button hx-post="/links/{{ .ID }}/archive" hx-target="closest .link-item" hx-swap="delete">Archive</button>
+    <div class="dropdown">
+      <button class="secondary dropdown-toggle">Revisit ▾</button>
+      <div class="dropdown-menu">
+        <form method="post" action="/links/{{ .ID }}/revisit">
+          <input type="hidden" name="duration" value="day">
+          <button type="submit">In a day</button>
+        </form>
+        <form method="post" action="/links/{{ .ID }}/revisit">
+          <input type="hidden" name="duration" value="week">
+          <button type="submit">In a week</button>
+        </form>
+        <form method="post" action="/links/{{ .ID }}/revisit">
+          <input type="hidden" name="duration" value="month">
+          <button type="submit">In a month</button>
+        </form>
+        <form method="post" action="/links/{{ .ID }}/revisit">
+          <input type="hidden" name="duration" value="year">
+          <button type="submit">In a year</button>
+        </form>
+      </div>
+    </div>
     {{ end }}
   </div>
 </li>

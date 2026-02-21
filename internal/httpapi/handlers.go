@@ -46,8 +46,9 @@ func (api *API) handleLinks(w http.ResponseWriter, r *http.Request) {
 // handleCreate creates a new link.
 func (api *API) handleCreate(w http.ResponseWriter, r *http.Request) {
 	var payload struct {
-		URL   string `json:"url"`
-		Title string `json:"title"`
+		URL       string     `json:"url"`
+		Title     string     `json:"title"`
+		RevisitAt *time.Time `json:"revisit_at"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid json")
@@ -73,6 +74,15 @@ func (api *API) handleCreate(w http.ResponseWriter, r *http.Request) {
 		log.Println(err)
 		writeError(w, http.StatusInternalServerError, "failed to create link")
 		return
+	}
+
+	if payload.RevisitAt != nil {
+		created, err = api.store.SetRevisitAt(created.ID, *payload.RevisitAt)
+		if err != nil {
+			log.Println(err)
+			writeError(w, http.StatusInternalServerError, "failed to set revisit time")
+			return
+		}
 	}
 
 	writeJSON(w, http.StatusCreated, created)
@@ -151,6 +161,19 @@ func (api *API) handleLinkAction(w http.ResponseWriter, r *http.Request) {
 		updated, err = api.store.Archive(linkID)
 	} else if action == "unarchive" {
 		updated, err = api.store.Unarchive(linkID)
+	} else if action == "revisit" {
+		var payload struct {
+			RevisitAt time.Time `json:"revisit_at"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid json")
+			return
+		}
+		if payload.RevisitAt.IsZero() {
+			writeError(w, http.StatusBadRequest, "revisit_at is required")
+			return
+		}
+		updated, err = api.store.SetRevisitAt(linkID, payload.RevisitAt)
 	} else {
 		writeError(w, http.StatusNotFound, "not found")
 		return

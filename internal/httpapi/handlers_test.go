@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"readthis/internal/storage"
 )
@@ -277,6 +278,123 @@ func TestListValidation(t *testing.T) {
 	resp, err = http.Get(server.URL + "/api/links?order=middle")
 	if err != nil {
 		t.Fatalf("list request failed: %v", err)
+	}
+	if resp.StatusCode != http.StatusBadRequest {
+		resp.Body.Close()
+		t.Fatalf("expected status 400, got %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+}
+
+func TestCreateWithRevisitAt(t *testing.T) {
+	// Ensures API can create a link with revisit_at.
+	store := storage.NewFileStore(filepath.Join(t.TempDir(), "links.json"))
+	api := New(store)
+	server := httptest.NewServer(api.Handler())
+	defer server.Close()
+
+	futureTime := time.Now().Add(24 * time.Hour).UTC().Truncate(time.Second)
+	revisitAt := futureTime.Format(time.RFC3339)
+
+	createBody := []byte(`{"url":"https://example.com","title":"Test Link","revisit_at":"` + revisitAt + `"}`)
+	resp, err := http.Post(server.URL+"/api/links", "application/json", bytes.NewReader(createBody))
+	if err != nil {
+		t.Fatalf("create request failed: %v", err)
+	}
+	if resp.StatusCode != http.StatusCreated {
+		resp.Body.Close()
+		t.Fatalf("expected status 201, got %d", resp.StatusCode)
+	}
+	var created storage.Link
+	if err := json.NewDecoder(resp.Body).Decode(&created); err != nil {
+		resp.Body.Close()
+		t.Fatalf("decode create response: %v", err)
+	}
+	resp.Body.Close()
+
+	if created.RevisitAt == nil {
+		t.Fatalf("expected revisit_at to be set")
+	}
+	if !created.RevisitAt.Equal(futureTime) {
+		t.Fatalf("expected revisit_at to match, got %v", created.RevisitAt)
+	}
+	if !created.Archived {
+		t.Fatalf("expected link to be archived when revisit_at is set")
+	}
+}
+
+func TestRevisitEndpoint(t *testing.T) {
+	// Ensures API can set revisit time via revisit endpoint.
+	store := storage.NewFileStore(filepath.Join(t.TempDir(), "links.json"))
+	api := New(store)
+	server := httptest.NewServer(api.Handler())
+	defer server.Close()
+
+	createBody := []byte(`{"url":"https://example.com","title":"Test Link"}`)
+	resp, err := http.Post(server.URL+"/api/links", "application/json", bytes.NewReader(createBody))
+	if err != nil {
+		t.Fatalf("create request failed: %v", err)
+	}
+	var created storage.Link
+	if err := json.NewDecoder(resp.Body).Decode(&created); err != nil {
+		resp.Body.Close()
+		t.Fatalf("decode create response: %v", err)
+	}
+	resp.Body.Close()
+
+	futureTime := time.Now().Add(7 * 24 * time.Hour).UTC().Truncate(time.Second)
+	revisitAt := futureTime.Format(time.RFC3339)
+
+	revisitBody := []byte(`{"revisit_at":"` + revisitAt + `"}`)
+	resp, err = http.Post(server.URL+"/api/links/"+created.ID+"/revisit", "application/json", bytes.NewReader(revisitBody))
+	if err != nil {
+		t.Fatalf("revisit request failed: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+		t.Fatalf("expected status 200, got %d", resp.StatusCode)
+	}
+	var updated storage.Link
+	if err := json.NewDecoder(resp.Body).Decode(&updated); err != nil {
+		resp.Body.Close()
+		t.Fatalf("decode revisit response: %v", err)
+	}
+	resp.Body.Close()
+
+	if updated.RevisitAt == nil {
+		t.Fatalf("expected revisit_at to be set")
+	}
+	if !updated.RevisitAt.Equal(futureTime) {
+		t.Fatalf("expected revisit_at to match, got %v", updated.RevisitAt)
+	}
+	if !updated.Archived {
+		t.Fatalf("expected link to be archived")
+	}
+}
+
+func TestRevisitEndpointRequiresRevisitAt(t *testing.T) {
+	// Ensures revisit endpoint requires revisit_at.
+	store := storage.NewFileStore(filepath.Join(t.TempDir(), "links.json"))
+	api := New(store)
+	server := httptest.NewServer(api.Handler())
+	defer server.Close()
+
+	createBody := []byte(`{"url":"https://example.com","title":"Test Link"}`)
+	resp, err := http.Post(server.URL+"/api/links", "application/json", bytes.NewReader(createBody))
+	if err != nil {
+		t.Fatalf("create request failed: %v", err)
+	}
+	var created storage.Link
+	if err := json.NewDecoder(resp.Body).Decode(&created); err != nil {
+		resp.Body.Close()
+		t.Fatalf("decode create response: %v", err)
+	}
+	resp.Body.Close()
+
+	revisitBody := []byte(`{}`)
+	resp, err = http.Post(server.URL+"/api/links/"+created.ID+"/revisit", "application/json", bytes.NewReader(revisitBody))
+	if err != nil {
+		t.Fatalf("revisit request failed: %v", err)
 	}
 	if resp.StatusCode != http.StatusBadRequest {
 		resp.Body.Close()

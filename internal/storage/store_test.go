@@ -245,3 +245,148 @@ func TestFileStoreDelete(t *testing.T) {
 		t.Fatalf("expected no links, got %d", len(links))
 	}
 }
+
+func TestFileStoreArchiveClearsExpiredRevisitAt(t *testing.T) {
+	// Ensures archiving a link clears expired revisit date.
+	store := NewFileStore(filepath.Join(t.TempDir(), "links.json"))
+
+	now := time.Now()
+	pastTime := now.Add(-24 * time.Hour)
+
+	created, err := store.Create("https://example.com/revisit", "Revisit Title", now)
+	if err != nil {
+		t.Fatalf("create link: %v", err)
+	}
+
+	_, err = store.SetRevisitAt(created.ID, pastTime)
+	if err != nil {
+		t.Fatalf("set revisit: %v", err)
+	}
+
+	archived, err := store.Archive(created.ID)
+	if err != nil {
+		t.Fatalf("archive link: %v", err)
+	}
+	if archived.RevisitAt != nil {
+		t.Fatalf("expected revisit to be cleared after archiving")
+	}
+}
+
+func TestFileStoreArchivePreservesFutureRevisitAt(t *testing.T) {
+	// Ensures archiving a link preserves future revisit date.
+	store := NewFileStore(filepath.Join(t.TempDir(), "links.json"))
+
+	now := time.Now()
+	futureTime := now.Add(24 * time.Hour)
+
+	created, err := store.Create("https://example.com/revisit", "Revisit Title", now)
+	if err != nil {
+		t.Fatalf("create link: %v", err)
+	}
+
+	_, err = store.SetRevisitAt(created.ID, futureTime)
+	if err != nil {
+		t.Fatalf("set revisit: %v", err)
+	}
+
+	archived, err := store.Archive(created.ID)
+	if err != nil {
+		t.Fatalf("archive link: %v", err)
+	}
+	if archived.RevisitAt == nil {
+		t.Fatalf("expected revisit to be preserved after archiving")
+	}
+	if !archived.RevisitAt.Equal(futureTime) {
+		t.Fatalf("expected revisit time to be preserved")
+	}
+}
+
+func TestFileStoreSetRevisitAt(t *testing.T) {
+	// Ensures SetRevisitAt sets the revisit time and archives the link.
+	store := NewFileStore(filepath.Join(t.TempDir(), "links.json"))
+
+	now := time.Now()
+	futureTime := now.Add(7 * 24 * time.Hour)
+
+	created, err := store.Create("https://example.com/revisit", "Revisit Title", now)
+	if err != nil {
+		t.Fatalf("create link: %v", err)
+	}
+
+	updated, err := store.SetRevisitAt(created.ID, futureTime)
+	if err != nil {
+		t.Fatalf("set revisit: %v", err)
+	}
+	if updated.RevisitAt == nil {
+		t.Fatalf("expected revisit_at to be set")
+	}
+	if !updated.RevisitAt.Equal(futureTime) {
+		t.Fatalf("expected revisit_at to match")
+	}
+	if !updated.Archived {
+		t.Fatalf("expected link to be archived")
+	}
+}
+
+func TestFileStoreListAutoUnarchivesExpiredRevisit(t *testing.T) {
+	// Ensures List auto-unarchives links when revisit time has passed.
+	store := NewFileStore(filepath.Join(t.TempDir(), "links.json"))
+
+	now := time.Now()
+	pastTime := now.Add(-1 * time.Hour)
+
+	created, err := store.Create("https://example.com/revisit", "Revisit Title", now)
+	if err != nil {
+		t.Fatalf("create link: %v", err)
+	}
+
+	_, err = store.SetRevisitAt(created.ID, pastTime)
+	if err != nil {
+		t.Fatalf("set revisit: %v", err)
+	}
+
+	archivedLinks, err := store.List(OrderNewestFirst, true)
+	if err != nil {
+		t.Fatalf("list archived: %v", err)
+	}
+	if len(archivedLinks) != 0 {
+		t.Fatalf("expected no archived links after auto-unarchive, got %d", len(archivedLinks))
+	}
+
+	activeLinks, err := store.List(OrderNewestFirst, false)
+	if err != nil {
+		t.Fatalf("list active: %v", err)
+	}
+	if len(activeLinks) != 1 {
+		t.Fatalf("expected 1 active link after auto-unarchive, got %d", len(activeLinks))
+	}
+	if activeLinks[0].RevisitAt != nil {
+		t.Fatalf("expected revisit_at to be cleared after auto-unarchive")
+	}
+}
+
+func TestFileStoreListPreservesFutureRevisit(t *testing.T) {
+	// Ensures List does not unarchive links with future revisit time.
+	store := NewFileStore(filepath.Join(t.TempDir(), "links.json"))
+
+	now := time.Now()
+	futureTime := now.Add(24 * time.Hour)
+
+	created, err := store.Create("https://example.com/revisit", "Revisit Title", now)
+	if err != nil {
+		t.Fatalf("create link: %v", err)
+	}
+
+	_, err = store.SetRevisitAt(created.ID, futureTime)
+	if err != nil {
+		t.Fatalf("set revisit: %v", err)
+	}
+
+	archivedLinks, err := store.List(OrderNewestFirst, true)
+	if err != nil {
+		t.Fatalf("list archived: %v", err)
+	}
+	if len(archivedLinks) != 1 {
+		t.Fatalf("expected 1 archived link, got %d", len(archivedLinks))
+	}
+}

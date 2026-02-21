@@ -198,6 +198,46 @@
         padding: 24px;
       }
 
+      .dropdown {
+        position: relative;
+        display: inline-block;
+      }
+
+      .dropdown-menu {
+        display: none;
+        position: absolute;
+        right: 0;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 8px 24px var(--shadow);
+        min-width: 160px;
+        z-index: 10;
+        overflow: hidden;
+      }
+
+      .dropdown-menu form {
+        margin: 0;
+      }
+
+      .dropdown-menu button {
+        width: 100%;
+        padding: 10px 16px;
+        border-radius: 0;
+        background: white;
+        color: var(--ink);
+        text-align: left;
+        font-size: 0.9rem;
+        border: none;
+      }
+
+      .dropdown-menu button:hover {
+        background: var(--paper-2);
+      }
+
+      .dropdown:hover .dropdown-menu {
+        display: block;
+      }
+
       @media (max-width: 640px) {
         h1 {
           font-size: 2rem;
@@ -243,10 +283,33 @@
     <div class="days-ago">today</div>
   </div>
   <div>
+    
     <button class="secondary" hx-get="/links/UUID/title?mode=edit" hx-target="closest .link-item" hx-swap="outerHTML">Edit title</button>
+    
     <button class="secondary" hx-post="/links/UUID/delete" hx-confirm="Delete this link?" hx-target="closest .link-item" hx-swap="delete">Delete</button>
     
     <button hx-post="/links/UUID/archive" hx-target="closest .link-item" hx-swap="delete">Archive</button>
+    <div class="dropdown">
+      <button class="secondary dropdown-toggle">Revisit ▾</button>
+      <div class="dropdown-menu">
+        <form method="post" action="/links/UUID/revisit">
+          <input type="hidden" name="duration" value="day">
+          <button type="submit">In a day</button>
+        </form>
+        <form method="post" action="/links/UUID/revisit">
+          <input type="hidden" name="duration" value="week">
+          <button type="submit">In a week</button>
+        </form>
+        <form method="post" action="/links/UUID/revisit">
+          <input type="hidden" name="duration" value="month">
+          <button type="submit">In a month</button>
+        </form>
+        <form method="post" action="/links/UUID/revisit">
+          <input type="hidden" name="duration" value="year">
+          <button type="submit">In a year</button>
+        </form>
+      </div>
+    </div>
     
   </div>
 </li>
@@ -259,10 +322,33 @@
     <div class="days-ago">1 day ago</div>
   </div>
   <div>
+    
     <button class="secondary" hx-get="/links/UUID/title?mode=edit" hx-target="closest .link-item" hx-swap="outerHTML">Edit title</button>
+    
     <button class="secondary" hx-post="/links/UUID/delete" hx-confirm="Delete this link?" hx-target="closest .link-item" hx-swap="delete">Delete</button>
     
     <button hx-post="/links/UUID/archive" hx-target="closest .link-item" hx-swap="delete">Archive</button>
+    <div class="dropdown">
+      <button class="secondary dropdown-toggle">Revisit ▾</button>
+      <div class="dropdown-menu">
+        <form method="post" action="/links/UUID/revisit">
+          <input type="hidden" name="duration" value="day">
+          <button type="submit">In a day</button>
+        </form>
+        <form method="post" action="/links/UUID/revisit">
+          <input type="hidden" name="duration" value="week">
+          <button type="submit">In a week</button>
+        </form>
+        <form method="post" action="/links/UUID/revisit">
+          <input type="hidden" name="duration" value="month">
+          <button type="submit">In a month</button>
+        </form>
+        <form method="post" action="/links/UUID/revisit">
+          <input type="hidden" name="duration" value="year">
+          <button type="submit">In a year</button>
+        </form>
+      </div>
+    </div>
     
   </div>
 </li>

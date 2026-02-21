@@ -198,6 +198,46 @@
         padding: 24px;
       }
 
+      .dropdown {
+        position: relative;
+        display: inline-block;
+      }
+
+      .dropdown-menu {
+        display: none;
+        position: absolute;
+        right: 0;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 8px 24px var(--shadow);
+        min-width: 160px;
+        z-index: 10;
+        overflow: hidden;
+      }
+
+      .dropdown-menu form {
+        margin: 0;
+      }
+
+      .dropdown-menu button {
+        width: 100%;
+        padding: 10px 16px;
+        border-radius: 0;
+        background: white;
+        color: var(--ink);
+        text-align: left;
+        font-size: 0.9rem;
+        border: none;
+      }
+
+      .dropdown-menu button:hover {
+        background: var(--paper-2);
+      }
+
+      .dropdown:hover .dropdown-menu {
+        display: block;
+      }
+
       @media (max-width: 640px) {
         h1 {
           font-size: 2rem;

@@ -22,9 +22,10 @@ const MissingTitle = "Missing title"
 
 // Link represents a saved URL.
 type Link struct {
-	ID        string    `json:"id"`
-	URL       string    `json:"url"`
-	Title     string    `json:"title"`
-	CreatedAt time.Time `json:"created_at"`
-	Archived  bool      `json:"archived"`
+	ID        string     `json:"id"`
+	URL       string     `json:"url"`
+	Title     string     `json:"title"`
+	CreatedAt time.Time  `json:"created_at"`
+	Archived  bool       `json:"archived"`
+	RevisitAt *time.Time `json:"revisit_at,omitempty"`
 }
