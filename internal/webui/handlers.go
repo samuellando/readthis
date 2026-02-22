@@ -23,6 +23,7 @@ type pageData struct {
 	Links          []linkView
 	OrderLabel     string
 	ToggleOrderURL string
+	Count          int
 }
 
 // linkView is the template-ready representation of a link.
@@ -261,6 +262,7 @@ func (ui *UI) renderList(w http.ResponseWriter, r *http.Request, archived bool) 
 		Links:          view,
 		OrderLabel:     label,
 		ToggleOrderURL: buildOrderURL(archived, toggle),
+		Count:          len(view),
 	}
 
 	var buf bytes.Buffer

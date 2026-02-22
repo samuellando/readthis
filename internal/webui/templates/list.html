@@ -17,6 +17,7 @@
 
 <section class="panel">
   <div class="toolbar">
+    <span>{{ .Count }} links</span>
     <a href="{{ .ToggleOrderURL }}">Order: {{ .OrderLabel }}</a>
   </div>
   {{ if not .Links }}
