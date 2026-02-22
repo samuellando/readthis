@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"errors"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -14,16 +15,16 @@ func TestFileStoreCreateAndListOrder(t *testing.T) {
 	firstTime := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
 	secondTime := firstTime.Add(2 * time.Hour)
 
-	first, err := store.Create("https://example.com/first", MissingTitle, firstTime)
+	first, err := store.Create("https://example.com/first", MissingTitle, firstTime, nil)
 	if err != nil {
 		t.Fatalf("create first link: %v", err)
 	}
-	second, err := store.Create("https://example.com/second", MissingTitle, secondTime)
+	second, err := store.Create("https://example.com/second", MissingTitle, secondTime, nil)
 	if err != nil {
 		t.Fatalf("create second link: %v", err)
 	}
 
-	links, err := store.List(OrderNewestFirst, false)
+	links, err := store.List(OrderNewestFirst, false, nil)
 	if err != nil {
 		t.Fatalf("list newest first: %v", err)
 	}
@@ -34,7 +35,7 @@ func TestFileStoreCreateAndListOrder(t *testing.T) {
 		t.Fatalf("unexpected order for newest first")
 	}
 
-	links, err = store.List(OrderOldestFirst, false)
+	links, err = store.List(OrderOldestFirst, false, nil)
 	if err != nil {
 		t.Fatalf("list oldest first: %v", err)
 	}
@@ -50,7 +51,7 @@ func TestFileStoreCreatePreservesTitle(t *testing.T) {
 	// Ensures non-empty titles are preserved.
 	store := NewFileStore(filepath.Join(t.TempDir(), "links.json"))
 
-	created, err := store.Create("https://example.com/title", "Example Title", time.Now())
+	created, err := store.Create("https://example.com/title", "Example Title", time.Now(), nil)
 	if err != nil {
 		t.Fatalf("create link: %v", err)
 	}
@@ -58,7 +59,7 @@ func TestFileStoreCreatePreservesTitle(t *testing.T) {
 		t.Fatalf("expected title to be preserved")
 	}
 
-	links, err := store.List(OrderNewestFirst, false)
+	links, err := store.List(OrderNewestFirst, false, nil)
 	if err != nil {
 		t.Fatalf("list links: %v", err)
 	}
@@ -74,7 +75,7 @@ func TestFileStoreArchiveAndUnarchive(t *testing.T) {
 	// Verifies archive/unarchive updates and archived filtering.
 	store := NewFileStore(filepath.Join(t.TempDir(), "links.json"))
 
-	created, err := store.Create("https://example.com/archive", MissingTitle, time.Now())
+	created, err := store.Create("https://example.com/archive", MissingTitle, time.Now(), nil)
 	if err != nil {
 		t.Fatalf("create link: %v", err)
 	}
@@ -95,7 +96,7 @@ func TestFileStoreArchiveAndUnarchive(t *testing.T) {
 		t.Fatalf("expected unarchived link")
 	}
 
-	archivedLinks, err := store.List(OrderNewestFirst, true)
+	archivedLinks, err := store.List(OrderNewestFirst, true, nil)
 	if err != nil {
 		t.Fatalf("list archived: %v", err)
 	}
@@ -103,7 +104,7 @@ func TestFileStoreArchiveAndUnarchive(t *testing.T) {
 		t.Fatalf("expected no archived links, got %d", len(archivedLinks))
 	}
 
-	activeLinks, err := store.List(OrderNewestFirst, false)
+	activeLinks, err := store.List(OrderNewestFirst, false, nil)
 	if err != nil {
 		t.Fatalf("list active: %v", err)
 	}
@@ -122,13 +123,13 @@ func TestFileStorePersistsToDisk(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "links.json")
 	store := NewFileStore(path)
 
-	created, err := store.Create("https://example.com/persist", MissingTitle, time.Now())
+	created, err := store.Create("https://example.com/persist", MissingTitle, time.Now(), nil)
 	if err != nil {
 		t.Fatalf("create link: %v", err)
 	}
 
 	reloaded := NewFileStore(path)
-	links, err := reloaded.List(OrderNewestFirst, false)
+	links, err := reloaded.List(OrderNewestFirst, false, nil)
 	if err != nil {
 		t.Fatalf("list links: %v", err)
 	}
@@ -148,7 +149,7 @@ func TestFileStoreConcurrentCreates(t *testing.T) {
 		index := i
 		go func() {
 			defer wg.Done()
-			_, err := store.Create("https://example.com/concurrent", MissingTitle, base.Add(time.Duration(index)*time.Minute))
+			_, err := store.Create("https://example.com/concurrent", MissingTitle, base.Add(time.Duration(index)*time.Minute), nil)
 			if err != nil {
 				t.Errorf("create link: %v", err)
 			}
@@ -165,7 +166,7 @@ func TestFileStoreConcurrentCreates(t *testing.T) {
 		t.Fatalf("timed out waiting for concurrent creates")
 	}
 
-	links, err := store.List(OrderNewestFirst, false)
+	links, err := store.List(OrderNewestFirst, false, nil)
 	if err != nil {
 		t.Fatalf("list links: %v", err)
 	}
@@ -178,7 +179,7 @@ func TestFileStoreUpdateTitle(t *testing.T) {
 	// Ensures title updates persist.
 	store := NewFileStore(filepath.Join(t.TempDir(), "links.json"))
 
-	created, err := store.Create("https://example.com/update", "Old Title", time.Now())
+	created, err := store.Create("https://example.com/update", "Old Title", time.Now(), nil)
 	if err != nil {
 		t.Fatalf("create link: %v", err)
 	}
@@ -191,7 +192,7 @@ func TestFileStoreUpdateTitle(t *testing.T) {
 		t.Fatalf("expected updated title")
 	}
 
-	links, err := store.List(OrderNewestFirst, false)
+	links, err := store.List(OrderNewestFirst, false, nil)
 	if err != nil {
 		t.Fatalf("list links: %v", err)
 	}
@@ -207,7 +208,7 @@ func TestFileStoreGet(t *testing.T) {
 	// Ensures Get returns the stored link by ID.
 	store := NewFileStore(filepath.Join(t.TempDir(), "links.json"))
 
-	created, err := store.Create("https://example.com/get", "Get Title", time.Now())
+	created, err := store.Create("https://example.com/get", "Get Title", time.Now(), nil)
 	if err != nil {
 		t.Fatalf("create link: %v", err)
 	}
@@ -228,7 +229,7 @@ func TestFileStoreDelete(t *testing.T) {
 	// Ensures Delete removes the link.
 	store := NewFileStore(filepath.Join(t.TempDir(), "links.json"))
 
-	created, err := store.Create("https://example.com/delete", "Delete Title", time.Now())
+	created, err := store.Create("https://example.com/delete", "Delete Title", time.Now(), nil)
 	if err != nil {
 		t.Fatalf("create link: %v", err)
 	}
@@ -237,7 +238,7 @@ func TestFileStoreDelete(t *testing.T) {
 		t.Fatalf("delete link: %v", err)
 	}
 
-	links, err := store.List(OrderNewestFirst, false)
+	links, err := store.List(OrderNewestFirst, false, nil)
 	if err != nil {
 		t.Fatalf("list links: %v", err)
 	}
@@ -253,7 +254,7 @@ func TestFileStoreArchiveClearsExpiredRevisitAt(t *testing.T) {
 	now := time.Now()
 	pastTime := now.Add(-24 * time.Hour)
 
-	created, err := store.Create("https://example.com/revisit", "Revisit Title", now)
+	created, err := store.Create("https://example.com/revisit", "Revisit Title", now, nil)
 	if err != nil {
 		t.Fatalf("create link: %v", err)
 	}
@@ -279,7 +280,7 @@ func TestFileStoreArchivePreservesFutureRevisitAt(t *testing.T) {
 	now := time.Now()
 	futureTime := now.Add(24 * time.Hour)
 
-	created, err := store.Create("https://example.com/revisit", "Revisit Title", now)
+	created, err := store.Create("https://example.com/revisit", "Revisit Title", now, nil)
 	if err != nil {
 		t.Fatalf("create link: %v", err)
 	}
@@ -308,7 +309,7 @@ func TestFileStoreSetRevisitAt(t *testing.T) {
 	now := time.Now()
 	futureTime := now.Add(7 * 24 * time.Hour)
 
-	created, err := store.Create("https://example.com/revisit", "Revisit Title", now)
+	created, err := store.Create("https://example.com/revisit", "Revisit Title", now, nil)
 	if err != nil {
 		t.Fatalf("create link: %v", err)
 	}
@@ -335,7 +336,7 @@ func TestFileStoreListAutoUnarchivesExpiredRevisit(t *testing.T) {
 	now := time.Now()
 	pastTime := now.Add(-1 * time.Hour)
 
-	created, err := store.Create("https://example.com/revisit", "Revisit Title", now)
+	created, err := store.Create("https://example.com/revisit", "Revisit Title", now, nil)
 	if err != nil {
 		t.Fatalf("create link: %v", err)
 	}
@@ -345,7 +346,7 @@ func TestFileStoreListAutoUnarchivesExpiredRevisit(t *testing.T) {
 		t.Fatalf("set revisit: %v", err)
 	}
 
-	archivedLinks, err := store.List(OrderNewestFirst, true)
+	archivedLinks, err := store.List(OrderNewestFirst, true, nil)
 	if err != nil {
 		t.Fatalf("list archived: %v", err)
 	}
@@ -353,7 +354,7 @@ func TestFileStoreListAutoUnarchivesExpiredRevisit(t *testing.T) {
 		t.Fatalf("expected no archived links after auto-unarchive, got %d", len(archivedLinks))
 	}
 
-	activeLinks, err := store.List(OrderNewestFirst, false)
+	activeLinks, err := store.List(OrderNewestFirst, false, nil)
 	if err != nil {
 		t.Fatalf("list active: %v", err)
 	}
@@ -372,7 +373,7 @@ func TestFileStoreListPreservesFutureRevisit(t *testing.T) {
 	now := time.Now()
 	futureTime := now.Add(24 * time.Hour)
 
-	created, err := store.Create("https://example.com/revisit", "Revisit Title", now)
+	created, err := store.Create("https://example.com/revisit", "Revisit Title", now, nil)
 	if err != nil {
 		t.Fatalf("create link: %v", err)
 	}
@@ -382,11 +383,163 @@ func TestFileStoreListPreservesFutureRevisit(t *testing.T) {
 		t.Fatalf("set revisit: %v", err)
 	}
 
-	archivedLinks, err := store.List(OrderNewestFirst, true)
+	archivedLinks, err := store.List(OrderNewestFirst, true, nil)
 	if err != nil {
 		t.Fatalf("list archived: %v", err)
 	}
 	if len(archivedLinks) != 1 {
 		t.Fatalf("expected 1 archived link, got %d", len(archivedLinks))
+	}
+}
+
+func TestFileStoreCreateWithTags(t *testing.T) {
+	store := NewFileStore(filepath.Join(t.TempDir(), "links.json"))
+
+	tags := []string{"go", "tutorial"}
+	created, err := store.Create("https://example.com/go", "Go Tutorial", time.Now(), tags)
+	if err != nil {
+		t.Fatalf("create link: %v", err)
+	}
+	if len(created.Tags) != 2 {
+		t.Fatalf("expected 2 tags, got %d", len(created.Tags))
+	}
+	if created.Tags[0] != "go" || created.Tags[1] != "tutorial" {
+		t.Fatalf("unexpected tags: %v", created.Tags)
+	}
+
+	links, err := store.List(OrderNewestFirst, false, nil)
+	if err != nil {
+		t.Fatalf("list links: %v", err)
+	}
+	if len(links) != 1 {
+		t.Fatalf("expected 1 link, got %d", len(links))
+	}
+	if len(links[0].Tags) != 2 {
+		t.Fatalf("expected 2 tags on stored link, got %d", len(links[0].Tags))
+	}
+}
+
+func TestFileStoreSetTags(t *testing.T) {
+	store := NewFileStore(filepath.Join(t.TempDir(), "links.json"))
+
+	created, err := store.Create("https://example.com", "Example", time.Now(), nil)
+	if err != nil {
+		t.Fatalf("create link: %v", err)
+	}
+
+	updated, err := store.SetTags(created.ID, []string{"tag1", "tag2"})
+	if err != nil {
+		t.Fatalf("set tags: %v", err)
+	}
+	if len(updated.Tags) != 2 {
+		t.Fatalf("expected 2 tags, got %d", len(updated.Tags))
+	}
+
+	link, err := store.Get(created.ID)
+	if err != nil {
+		t.Fatalf("get link: %v", err)
+	}
+	if len(link.Tags) != 2 {
+		t.Fatalf("expected 2 tags on retrieved link, got %d", len(link.Tags))
+	}
+}
+
+func TestFileStoreAddTags(t *testing.T) {
+	store := NewFileStore(filepath.Join(t.TempDir(), "links.json"))
+
+	created, err := store.Create("https://example.com", "Example", time.Now(), []string{"existing"})
+	if err != nil {
+		t.Fatalf("create link: %v", err)
+	}
+
+	updated, err := store.AddTags(created.ID, []string{"new"})
+	if err != nil {
+		t.Fatalf("add tags: %v", err)
+	}
+	if len(updated.Tags) != 2 {
+		t.Fatalf("expected 2 tags, got %d", len(updated.Tags))
+	}
+
+	updated, err = store.AddTags(created.ID, []string{"existing", "another"})
+	if err != nil {
+		t.Fatalf("add tags again: %v", err)
+	}
+	if len(updated.Tags) != 3 {
+		t.Fatalf("expected 3 tags after merge, got %d", len(updated.Tags))
+	}
+}
+
+func TestFileStoreGetTags(t *testing.T) {
+	store := NewFileStore(filepath.Join(t.TempDir(), "links.json"))
+
+	created, err := store.Create("https://example.com", "Example", time.Now(), []string{"a", "b"})
+	if err != nil {
+		t.Fatalf("create link: %v", err)
+	}
+
+	tags, err := store.GetTags(created.ID)
+	if err != nil {
+		t.Fatalf("get tags: %v", err)
+	}
+	if len(tags) != 2 {
+		t.Fatalf("expected 2 tags, got %d", len(tags))
+	}
+
+	_, err = store.GetTags("nonexistent")
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("expected ErrNotFound for nonexistent link, got %v", err)
+	}
+}
+
+func TestFileStoreListFilterByTags(t *testing.T) {
+	store := NewFileStore(filepath.Join(t.TempDir(), "links.json"))
+
+	_, err := store.Create("https://example.com/go", "Go", time.Now(), []string{"go", "tutorial"})
+	if err != nil {
+		t.Fatalf("create link 1: %v", err)
+	}
+	_, err = store.Create("https://example.com/rust", "Rust", time.Now(), []string{"rust", "tutorial"})
+	if err != nil {
+		t.Fatalf("create link 2: %v", err)
+	}
+	_, err = store.Create("https://example.com/other", "Other", time.Now(), []string{"misc"})
+	if err != nil {
+		t.Fatalf("create link 3: %v", err)
+	}
+	_, err = store.Create("https://example.com/notag", "No Tag", time.Now(), nil)
+	if err != nil {
+		t.Fatalf("create link 4: %v", err)
+	}
+
+	links, err := store.List(OrderNewestFirst, false, nil)
+	if err != nil {
+		t.Fatalf("list all: %v", err)
+	}
+	if len(links) != 4 {
+		t.Fatalf("expected 4 links with no filter, got %d", len(links))
+	}
+
+	links, err = store.List(OrderNewestFirst, false, []string{"tutorial"})
+	if err != nil {
+		t.Fatalf("list by tutorial tag: %v", err)
+	}
+	if len(links) != 2 {
+		t.Fatalf("expected 2 links with tutorial tag, got %d", len(links))
+	}
+
+	links, err = store.List(OrderNewestFirst, false, []string{"go", "rust"})
+	if err != nil {
+		t.Fatalf("list by go or rust tag: %v", err)
+	}
+	if len(links) != 2 {
+		t.Fatalf("expected 2 links with go or rust tag, got %d", len(links))
+	}
+
+	links, err = store.List(OrderNewestFirst, false, []string{"nonexistent"})
+	if err != nil {
+		t.Fatalf("list by nonexistent tag: %v", err)
+	}
+	if len(links) != 0 {
+		t.Fatalf("expected 0 links with nonexistent tag, got %d", len(links))
 	}
 }

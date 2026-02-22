@@ -28,4 +28,5 @@ type Link struct {
 	CreatedAt time.Time  `json:"created_at"`
 	Archived  bool       `json:"archived"`
 	RevisitAt *time.Time `json:"revisit_at,omitempty"`
+	Tags      []string   `json:"tags,omitempty"`
 }

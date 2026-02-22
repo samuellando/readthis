@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -29,8 +30,8 @@ func NewFileStore(path string) *FileStore {
 	}
 }
 
-// Create adds a new link with the provided URL, title, and timestamp.
-func (s *FileStore) Create(url string, title string, createdAt time.Time) (Link, error) {
+// Create adds a new link with the provided URL, title, timestamp, and tags.
+func (s *FileStore) Create(url string, title string, createdAt time.Time, tags []string) (Link, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -47,6 +48,7 @@ func (s *FileStore) Create(url string, title string, createdAt time.Time) (Link,
 			Title:     title,
 			CreatedAt: createdAt,
 			Archived:  false,
+			Tags:      tags,
 		}
 		links = append(links, created)
 
@@ -59,8 +61,8 @@ func (s *FileStore) Create(url string, title string, createdAt time.Time) (Link,
 	return created, nil
 }
 
-// List returns links filtered by archived status and sorted by order.
-func (s *FileStore) List(order Order, archived bool) ([]Link, error) {
+// List returns links filtered by archived status and tags, sorted by order.
+func (s *FileStore) List(order Order, archived bool, tags []string) ([]Link, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -94,9 +96,22 @@ func (s *FileStore) List(order Order, archived bool) ([]Link, error) {
 
 	filtered := make([]Link, 0, len(links))
 	for _, link := range links {
-		if link.Archived == archived {
-			filtered = append(filtered, link)
+		if link.Archived != archived {
+			continue
 		}
+		if len(tags) > 0 {
+			hasTag := false
+			for _, t := range tags {
+				if slices.Contains(link.Tags, t) {
+					hasTag = true
+					break
+				}
+			}
+			if !hasTag {
+				continue
+			}
+		}
+		filtered = append(filtered, link)
 	}
 	links = filtered
 
@@ -286,6 +301,115 @@ func (s *FileStore) SetRevisitAt(id string, revisitAt time.Time) (Link, error) {
 	}
 
 	return updated, nil
+}
+
+// SetTags replaces all tags for a link.
+func (s *FileStore) SetTags(id string, tags []string) (Link, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var updated Link
+	err := s.withFileLock(func() error {
+		links, err := s.readLinks()
+		if err != nil {
+			return err
+		}
+
+		found := false
+		for i := range links {
+			if links[i].ID == id {
+				links[i].Tags = tags
+				updated = links[i]
+				found = true
+				break
+			}
+		}
+		if !found {
+			return ErrNotFound
+		}
+
+		return s.writeLinks(links)
+	})
+	if err != nil {
+		return Link{}, err
+	}
+
+	return updated, nil
+}
+
+// AddTags adds new tags to a link, merging with existing tags.
+func (s *FileStore) AddTags(id string, tagsToAdd []string) (Link, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var updated Link
+	err := s.withFileLock(func() error {
+		links, err := s.readLinks()
+		if err != nil {
+			return err
+		}
+
+		found := false
+		for i := range links {
+			if links[i].ID == id {
+				existing := make(map[string]bool)
+				for _, t := range links[i].Tags {
+					existing[t] = true
+				}
+				for _, t := range tagsToAdd {
+					if !existing[t] {
+						links[i].Tags = append(links[i].Tags, t)
+					}
+				}
+				updated = links[i]
+				found = true
+				break
+			}
+		}
+		if !found {
+			return ErrNotFound
+		}
+
+		return s.writeLinks(links)
+	})
+	if err != nil {
+		return Link{}, err
+	}
+
+	return updated, nil
+}
+
+// GetTags returns all tags for a link.
+func (s *FileStore) GetTags(id string) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var tags []string
+	err := s.withFileLock(func() error {
+		links, err := s.readLinks()
+		if err != nil {
+			return err
+		}
+
+		found := false
+		for _, link := range links {
+			if link.ID == id {
+				tags = link.Tags
+				found = true
+				break
+			}
+		}
+		if !found {
+			return ErrNotFound
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return tags, nil
 }
 
 // withFileLock executes a function while holding an OS file lock.
