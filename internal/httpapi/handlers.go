@@ -49,6 +49,7 @@ func (api *API) handleCreate(w http.ResponseWriter, r *http.Request) {
 		URL       string     `json:"url"`
 		Title     string     `json:"title"`
 		RevisitAt *time.Time `json:"revisit_at"`
+		Tags      []string   `json:"tags"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid json")
@@ -69,7 +70,8 @@ func (api *API) handleCreate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	created, err := api.store.Create(payload.URL, linkTitle, time.Now().UTC())
+	tags := normalizeTags(payload.Tags)
+	created, err := api.store.Create(payload.URL, linkTitle, time.Now().UTC(), tags)
 	if err != nil {
 		log.Println(err)
 		writeError(w, http.StatusInternalServerError, "failed to create link")
@@ -113,7 +115,7 @@ func (api *API) handleList(w http.ResponseWriter, r *http.Request) {
 		archived = parsed
 	}
 
-	links, err := api.store.List(order, archived)
+	links, err := api.store.List(order, archived, nil)
 	if err != nil {
 		log.Println(err)
 		writeError(w, http.StatusInternalServerError, "failed to list links")
@@ -123,7 +125,7 @@ func (api *API) handleList(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, links)
 }
 
-// handleLinkAction archives, unarchives, or deletes a link.
+// handleLinkAction archives, unarchives, deletes a link, or manages tags.
 func (api *API) handleLinkAction(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/api/links/")
 	parts := strings.Split(strings.Trim(path, "/"), "/")
@@ -140,6 +142,20 @@ func (api *API) handleLinkAction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	if len(parts) == 2 && parts[1] == "tags" {
+		linkID := parts[0]
+		if r.Method == http.MethodGet {
+			api.handleGetTags(w, r, linkID)
+			return
+		}
+		if r.Method == http.MethodPost {
+			api.handleSetTags(w, r, linkID)
+			return
+		}
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
@@ -192,6 +208,45 @@ func (api *API) handleLinkAction(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, updated)
 }
 
+// handleGetTags returns the tags for a link.
+func (api *API) handleGetTags(w http.ResponseWriter, r *http.Request, linkID string) {
+	tags, err := api.store.GetTags(linkID)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "link not found")
+			return
+		}
+		log.Println(err)
+		writeError(w, http.StatusInternalServerError, "failed to get tags")
+		return
+	}
+	writeJSON(w, http.StatusOK, tags)
+}
+
+// handleSetTags replaces all tags for a link.
+func (api *API) handleSetTags(w http.ResponseWriter, r *http.Request, linkID string) {
+	var payload struct {
+		Tags []string `json:"tags"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+
+	tags := normalizeTags(payload.Tags)
+	updated, err := api.store.SetTags(linkID, tags)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "link not found")
+			return
+		}
+		log.Println(err)
+		writeError(w, http.StatusInternalServerError, "failed to set tags")
+		return
+	}
+	writeJSON(w, http.StatusOK, updated)
+}
+
 // parseBool parses a true/false string with validation.
 func parseBool(value string) (bool, error) {
 	switch strings.ToLower(value) {
@@ -202,6 +257,27 @@ func parseBool(value string) (bool, error) {
 	default:
 		return false, errors.New("invalid bool")
 	}
+}
+
+// normalizeTags removes empty strings and duplicates from a tag list.
+func normalizeTags(tags []string) []string {
+	if len(tags) == 0 {
+		return nil
+	}
+	seen := make(map[string]bool)
+	result := make([]string, 0, len(tags))
+	for _, tag := range tags {
+		tag = strings.TrimSpace(tag)
+		if tag == "" || seen[tag] {
+			continue
+		}
+		seen[tag] = true
+		result = append(result, tag)
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
 }
 
 // writeJSON writes a JSON response with status.

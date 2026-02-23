@@ -238,6 +238,54 @@
         display: block;
       }
 
+      .tags {
+        color: var(--accent-2);
+        font-size: 0.85rem;
+        margin-top: 2px;
+      }
+
+      .filter-section {
+        margin-top: 12px;
+      }
+
+      .filter-menu {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 8px 24px var(--shadow);
+        padding: 12px;
+        margin-top: 8px;
+        min-width: 200px;
+      }
+
+      .filter-menu.hidden {
+        display: none;
+      }
+
+      .filter-checkbox {
+        display: block;
+        padding: 6px 0;
+        font-size: 0.9rem;
+        cursor: pointer;
+      }
+
+      .filter-checkbox input {
+        margin-right: 8px;
+      }
+
+      .filter-buttons {
+        display: flex;
+        gap: 8px;
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid #eadfd2;
+      }
+
+      .filter-buttons button {
+        flex: 1;
+        padding: 8px 12px;
+        font-size: 0.85rem;
+      }
+
       @media (max-width: 640px) {
         h1 {
           font-size: 2rem;

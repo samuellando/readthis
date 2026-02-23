@@ -402,3 +402,247 @@ func TestRevisitEndpointRequiresRevisitAt(t *testing.T) {
 	}
 	resp.Body.Close()
 }
+
+func TestCreateWithTags(t *testing.T) {
+	store := storage.NewFileStore(filepath.Join(t.TempDir(), "links.json"))
+	api := New(store)
+	server := httptest.NewServer(api.Handler())
+	defer server.Close()
+
+	createBody := []byte(`{"url":"https://example.com","title":"Test Link","tags":["go","tutorial"]}`)
+	resp, err := http.Post(server.URL+"/api/links", "application/json", bytes.NewReader(createBody))
+	if err != nil {
+		t.Fatalf("create request failed: %v", err)
+	}
+	if resp.StatusCode != http.StatusCreated {
+		resp.Body.Close()
+		t.Fatalf("expected status 201, got %d", resp.StatusCode)
+	}
+	var created storage.Link
+	if err := json.NewDecoder(resp.Body).Decode(&created); err != nil {
+		resp.Body.Close()
+		t.Fatalf("decode create response: %v", err)
+	}
+	resp.Body.Close()
+
+	if len(created.Tags) != 2 {
+		t.Fatalf("expected 2 tags, got %d", len(created.Tags))
+	}
+	if created.Tags[0] != "go" || created.Tags[1] != "tutorial" {
+		t.Fatalf("unexpected tags: %v", created.Tags)
+	}
+}
+
+func TestCreateWithoutTags(t *testing.T) {
+	store := storage.NewFileStore(filepath.Join(t.TempDir(), "links.json"))
+	api := New(store)
+	server := httptest.NewServer(api.Handler())
+	defer server.Close()
+
+	createBody := []byte(`{"url":"https://example.com","title":"Test Link"}`)
+	resp, err := http.Post(server.URL+"/api/links", "application/json", bytes.NewReader(createBody))
+	if err != nil {
+		t.Fatalf("create request failed: %v", err)
+	}
+	if resp.StatusCode != http.StatusCreated {
+		resp.Body.Close()
+		t.Fatalf("expected status 201, got %d", resp.StatusCode)
+	}
+	var created storage.Link
+	if err := json.NewDecoder(resp.Body).Decode(&created); err != nil {
+		resp.Body.Close()
+		t.Fatalf("decode create response: %v", err)
+	}
+	resp.Body.Close()
+
+	if len(created.Tags) != 0 {
+		t.Fatalf("expected 0 tags, got %d", len(created.Tags))
+	}
+}
+
+func TestCreateNormalizesTags(t *testing.T) {
+	store := storage.NewFileStore(filepath.Join(t.TempDir(), "links.json"))
+	api := New(store)
+	server := httptest.NewServer(api.Handler())
+	defer server.Close()
+
+	createBody := []byte(`{"url":"https://example.com","title":"Test Link","tags":["go","","go","  rust  ",""]}`)
+	resp, err := http.Post(server.URL+"/api/links", "application/json", bytes.NewReader(createBody))
+	if err != nil {
+		t.Fatalf("create request failed: %v", err)
+	}
+	if resp.StatusCode != http.StatusCreated {
+		resp.Body.Close()
+		t.Fatalf("expected status 201, got %d", resp.StatusCode)
+	}
+	var created storage.Link
+	if err := json.NewDecoder(resp.Body).Decode(&created); err != nil {
+		resp.Body.Close()
+		t.Fatalf("decode create response: %v", err)
+	}
+	resp.Body.Close()
+
+	if len(created.Tags) != 2 {
+		t.Fatalf("expected 2 tags after normalization, got %d: %v", len(created.Tags), created.Tags)
+	}
+	if created.Tags[0] != "go" || created.Tags[1] != "rust" {
+		t.Fatalf("unexpected tags after normalization: %v", created.Tags)
+	}
+}
+
+func TestGetTags(t *testing.T) {
+	store := storage.NewFileStore(filepath.Join(t.TempDir(), "links.json"))
+	api := New(store)
+	server := httptest.NewServer(api.Handler())
+	defer server.Close()
+
+	createBody := []byte(`{"url":"https://example.com","title":"Test Link","tags":["tag1","tag2"]}`)
+	resp, err := http.Post(server.URL+"/api/links", "application/json", bytes.NewReader(createBody))
+	if err != nil {
+		t.Fatalf("create request failed: %v", err)
+	}
+	var created storage.Link
+	if err := json.NewDecoder(resp.Body).Decode(&created); err != nil {
+		resp.Body.Close()
+		t.Fatalf("decode create response: %v", err)
+	}
+	resp.Body.Close()
+
+	resp, err = http.Get(server.URL + "/api/links/" + created.ID + "/tags")
+	if err != nil {
+		t.Fatalf("get tags request failed: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+		t.Fatalf("expected status 200, got %d", resp.StatusCode)
+	}
+	var tags []string
+	if err := json.NewDecoder(resp.Body).Decode(&tags); err != nil {
+		resp.Body.Close()
+		t.Fatalf("decode tags response: %v", err)
+	}
+	resp.Body.Close()
+
+	if len(tags) != 2 {
+		t.Fatalf("expected 2 tags, got %d", len(tags))
+	}
+}
+
+func TestGetTagsNotFound(t *testing.T) {
+	store := storage.NewFileStore(filepath.Join(t.TempDir(), "links.json"))
+	api := New(store)
+	server := httptest.NewServer(api.Handler())
+	defer server.Close()
+
+	resp, err := http.Get(server.URL + "/api/links/nonexistent/tags")
+	if err != nil {
+		t.Fatalf("get tags request failed: %v", err)
+	}
+	if resp.StatusCode != http.StatusNotFound {
+		resp.Body.Close()
+		t.Fatalf("expected status 404, got %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+}
+
+func TestSetTags(t *testing.T) {
+	store := storage.NewFileStore(filepath.Join(t.TempDir(), "links.json"))
+	api := New(store)
+	server := httptest.NewServer(api.Handler())
+	defer server.Close()
+
+	createBody := []byte(`{"url":"https://example.com","title":"Test Link"}`)
+	resp, err := http.Post(server.URL+"/api/links", "application/json", bytes.NewReader(createBody))
+	if err != nil {
+		t.Fatalf("create request failed: %v", err)
+	}
+	var created storage.Link
+	if err := json.NewDecoder(resp.Body).Decode(&created); err != nil {
+		resp.Body.Close()
+		t.Fatalf("decode create response: %v", err)
+	}
+	resp.Body.Close()
+
+	setTagsBody := []byte(`{"tags":["new1","new2"]}`)
+	resp, err = http.Post(server.URL+"/api/links/"+created.ID+"/tags", "application/json", bytes.NewReader(setTagsBody))
+	if err != nil {
+		t.Fatalf("set tags request failed: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+		t.Fatalf("expected status 200, got %d", resp.StatusCode)
+	}
+	var updated storage.Link
+	if err := json.NewDecoder(resp.Body).Decode(&updated); err != nil {
+		resp.Body.Close()
+		t.Fatalf("decode set tags response: %v", err)
+	}
+	resp.Body.Close()
+
+	if len(updated.Tags) != 2 {
+		t.Fatalf("expected 2 tags, got %d", len(updated.Tags))
+	}
+	if updated.Tags[0] != "new1" || updated.Tags[1] != "new2" {
+		t.Fatalf("unexpected tags: %v", updated.Tags)
+	}
+}
+
+func TestSetTagsNotFound(t *testing.T) {
+	store := storage.NewFileStore(filepath.Join(t.TempDir(), "links.json"))
+	api := New(store)
+	server := httptest.NewServer(api.Handler())
+	defer server.Close()
+
+	setTagsBody := []byte(`{"tags":["tag"]}`)
+	resp, err := http.Post(server.URL+"/api/links/nonexistent/tags", "application/json", bytes.NewReader(setTagsBody))
+	if err != nil {
+		t.Fatalf("set tags request failed: %v", err)
+	}
+	if resp.StatusCode != http.StatusNotFound {
+		resp.Body.Close()
+		t.Fatalf("expected status 404, got %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+}
+
+func TestSetTagsNormalizesTags(t *testing.T) {
+	store := storage.NewFileStore(filepath.Join(t.TempDir(), "links.json"))
+	api := New(store)
+	server := httptest.NewServer(api.Handler())
+	defer server.Close()
+
+	createBody := []byte(`{"url":"https://example.com","title":"Test Link"}`)
+	resp, err := http.Post(server.URL+"/api/links", "application/json", bytes.NewReader(createBody))
+	if err != nil {
+		t.Fatalf("create request failed: %v", err)
+	}
+	var created storage.Link
+	if err := json.NewDecoder(resp.Body).Decode(&created); err != nil {
+		resp.Body.Close()
+		t.Fatalf("decode create response: %v", err)
+	}
+	resp.Body.Close()
+
+	setTagsBody := []byte(`{"tags":["go","","go","  rust  ",""]}`)
+	resp, err = http.Post(server.URL+"/api/links/"+created.ID+"/tags", "application/json", bytes.NewReader(setTagsBody))
+	if err != nil {
+		t.Fatalf("set tags request failed: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+		t.Fatalf("expected status 200, got %d", resp.StatusCode)
+	}
+	var updated storage.Link
+	if err := json.NewDecoder(resp.Body).Decode(&updated); err != nil {
+		resp.Body.Close()
+		t.Fatalf("decode set tags response: %v", err)
+	}
+	resp.Body.Close()
+
+	if len(updated.Tags) != 2 {
+		t.Fatalf("expected 2 tags after normalization, got %d: %v", len(updated.Tags), updated.Tags)
+	}
+	if updated.Tags[0] != "go" || updated.Tags[1] != "rust" {
+		t.Fatalf("unexpected tags after normalization: %v", updated.Tags)
+	}
+}

@@ -1,3 +1,15 @@
+{{ define "links-list" }}
+{{ if not .Links }}
+<div class="empty">Nothing here yet.</div>
+{{ else }}
+<ul class="links" id="links">
+  {{ range .Links }}
+  {{ template "item" . }}
+  {{ end }}
+</ul>
+{{ end }}
+{{ end }}
+
 {{ define "content" }}
 <header>
     <h1>ReadThis{{ if .IsArchive }} Archive{{ end }}</h1>
@@ -20,6 +32,25 @@
     <span>{{ .Count }} links</span>
     <a href="{{ .ToggleOrderURL }}">Order: {{ .OrderLabel }}</a>
   </div>
+  {{ if .AllTags }}
+  <div class="filter-section">
+    <button class="secondary" onclick="document.getElementById('filter-menu').classList.toggle('hidden')">Filter by tags ▾</button>
+    <div id="filter-menu" class="filter-menu hidden">
+      <form hx-get="{{ .FilterURL }}" hx-target="#links" hx-swap="outerHTML" hx-push-url="true">
+        {{ range .AllTags }}
+        <label class="filter-checkbox">
+          <input type="checkbox" name="tag" value="{{ . }}" {{ if not $.SelectedTags }}checked{{ else }}{{ if contains $.SelectedTags . }}checked{{ end }}{{ end }}>
+          {{ . }}
+        </label>
+        {{ end }}
+        <div class="filter-buttons">
+          <button type="button" class="secondary" hx-get="{{ if .IsArchive }}/archive{{ else }}/{{ end }}" hx-target="#links" hx-swap="outerHTML" hx-push-url="true">Clear</button>
+          <button type="submit">Apply filter</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  {{ end }}
   {{ if not .Links }}
   <div class="empty">Nothing here yet.</div>
   {{ else }}
@@ -36,11 +67,15 @@
 <li class="link-item" data-id="{{ .ID }}">
   <div class="link-meta">
     <a href="{{ .URL }}" target="_blank" rel="noreferrer">{{ .Title }}</a>
+    {{ if .Tags }}
+    <div class="tags">{{ range $i, $t := .Tags }}{{ if $i }}, {{ end }}{{ $t }}{{ end }}</div>
+    {{ end }}
     <div class="days-ago">{{ .DaysAgo }}{{ if and .DaysUntilRevisit (ne .DaysUntilRevisit "now") }} · revisit in {{ .DaysUntilRevisit }}{{ else if eq .DaysUntilRevisit "now" }} · revisiting{{ end }}</div>
   </div>
   <div>
     {{ if not .Archived }}
     <button class="secondary" hx-get="/links/{{ .ID }}/title?mode=edit" hx-target="closest .link-item" hx-swap="outerHTML">Edit title</button>
+    <button class="secondary" hx-get="/links/{{ .ID }}/tags" hx-target="closest .link-item" hx-swap="outerHTML">Edit tags</button>
     {{ end }}
     <button class="secondary" hx-post="/links/{{ .ID }}/delete" hx-confirm="Delete this link?" hx-target="closest .link-item" hx-swap="delete">Delete</button>
     {{ if .Archived }}
@@ -80,6 +115,49 @@
     <div class="days-ago">{{ .DaysAgo }}{{ if and .DaysUntilRevisit (ne .DaysUntilRevisit "now") }} · revisit in {{ .DaysUntilRevisit }}{{ else if eq .DaysUntilRevisit "now" }} · revisiting{{ end }}</div>
     <form class="title-form" method="post" action="/links/{{ .ID }}/title">
       <input name="title" type="text" value="{{ .Title }}" aria-label="Title">
+      <button class="secondary" type="submit">Save</button>
+      <button class="secondary" hx-get="/links/{{ .ID }}/title?mode=view" hx-target="closest .link-item" hx-swap="outerHTML" formnovalidate>Cancel</button>
+    </form>
+  </div>
+  <div>
+    <button class="secondary" hx-post="/links/{{ .ID }}/delete" hx-confirm="Delete this link?" hx-target="closest .link-item" hx-swap="delete">Delete</button>
+    {{ if .Archived }}
+    <button class="secondary" hx-post="/links/{{ .ID }}/unarchive" hx-target="closest .link-item" hx-swap="delete">Unarchive</button>
+    {{ else }}
+    <button hx-post="/links/{{ .ID }}/archive" hx-target="closest .link-item" hx-swap="delete">Archive</button>
+    <div class="dropdown">
+      <button class="secondary dropdown-toggle">Revisit ▾</button>
+      <div class="dropdown-menu">
+        <form method="post" action="/links/{{ .ID }}/revisit">
+          <input type="hidden" name="duration" value="day">
+          <button type="submit">In a day</button>
+        </form>
+        <form method="post" action="/links/{{ .ID }}/revisit">
+          <input type="hidden" name="duration" value="week">
+          <button type="submit">In a week</button>
+        </form>
+        <form method="post" action="/links/{{ .ID }}/revisit">
+          <input type="hidden" name="duration" value="month">
+          <button type="submit">In a month</button>
+        </form>
+        <form method="post" action="/links/{{ .ID }}/revisit">
+          <input type="hidden" name="duration" value="year">
+          <button type="submit">In a year</button>
+        </form>
+      </div>
+    </div>
+    {{ end }}
+  </div>
+</li>
+{{ end }}
+
+{{ define "item-tags-edit" }}
+<li class="link-item" data-id="{{ .ID }}">
+  <div class="link-meta">
+    <a href="{{ .URL }}" target="_blank" rel="noreferrer">{{ .Title }}</a>
+    <div class="days-ago">{{ .DaysAgo }}{{ if and .DaysUntilRevisit (ne .DaysUntilRevisit "now") }} · revisit in {{ .DaysUntilRevisit }}{{ else if eq .DaysUntilRevisit "now" }} · revisiting{{ end }}</div>
+    <form class="title-form" method="post" action="/links/{{ .ID }}/tags">
+      <input name="tags" type="text" value="{{ .TagsDisplay }}" placeholder="tag1, tag2, tag3" aria-label="Tags">
       <button class="secondary" type="submit">Save</button>
       <button class="secondary" hx-get="/links/{{ .ID }}/title?mode=view" hx-target="closest .link-item" hx-swap="outerHTML" formnovalidate>Cancel</button>
     </form>

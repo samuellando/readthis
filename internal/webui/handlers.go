@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -24,6 +25,9 @@ type pageData struct {
 	OrderLabel     string
 	ToggleOrderURL string
 	Count          int
+	AllTags        []string
+	SelectedTags   []string
+	FilterURL      string
 }
 
 // linkView is the template-ready representation of a link.
@@ -35,6 +39,8 @@ type linkView struct {
 	Archived         bool
 	RevisitAt        *time.Time
 	DaysUntilRevisit string
+	Tags             []string
+	TagsDisplay      string
 }
 
 // templatesFS embeds the HTML templates.
@@ -51,7 +57,17 @@ type UI struct {
 
 // New constructs the UI with a template set and clock function.
 func New(store *storage.FileStore, now func() time.Time) (*UI, error) {
-	tpl, err := template.ParseFS(templatesFS, "templates/*.html")
+	funcMap := template.FuncMap{
+		"contains": func(slice []string, item string) bool {
+			for _, s := range slice {
+				if s == item {
+					return true
+				}
+			}
+			return false
+		},
+	}
+	tpl, err := template.New("").Funcs(funcMap).ParseFS(templatesFS, "templates/*.html")
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +137,7 @@ func (ui *UI) handleCreate(w http.ResponseWriter, r *http.Request) {
 		linkTitle = extracted
 	}
 
-	if _, err := ui.store.Create(url, linkTitle, ui.now().UTC()); err != nil {
+	if _, err := ui.store.Create(url, linkTitle, ui.now().UTC(), nil); err != nil {
 		log.Println(err)
 		writeServerError(w, "failed to save link")
 		return
@@ -158,6 +174,21 @@ func (ui *UI) handleAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if r.Method == http.MethodGet && action == "tags" {
+		link, err := ui.store.Get(linkID)
+		if err != nil {
+			if errors.Is(err, storage.ErrNotFound) {
+				writeNotFound(w)
+				return
+			}
+			log.Println(err)
+			writeServerError(w, "failed to load link")
+			return
+		}
+		ui.renderItemTagsEdit(w, link)
+		return
+	}
+
 	if r.Method != http.MethodPost {
 		writeMethodNotAllowed(w)
 		return
@@ -180,6 +211,15 @@ func (ui *UI) handleAction(w http.ResponseWriter, r *http.Request) {
 		}
 		newTitle := strings.TrimSpace(r.FormValue("title"))
 		updated, err = ui.store.UpdateTitle(linkID, newTitle)
+	case "tags":
+		if err := r.ParseForm(); err != nil {
+			log.Println(err)
+			writeBadRequest(w, "invalid form")
+			return
+		}
+		tagsInput := strings.TrimSpace(r.FormValue("tags"))
+		tags := parseTagsInput(tagsInput)
+		updated, err = ui.store.SetTags(linkID, tags)
 	case "revisit":
 		if err := r.ParseForm(); err != nil {
 			log.Println(err)
@@ -212,6 +252,10 @@ func (ui *UI) handleAction(w http.ResponseWriter, r *http.Request) {
 			ui.renderItem(w, updated, false)
 			return
 		}
+		if action == "tags" {
+			ui.renderItem(w, updated, false)
+			return
+		}
 		w.WriteHeader(http.StatusOK)
 		return
 	}
@@ -227,13 +271,22 @@ func (ui *UI) renderList(w http.ResponseWriter, r *http.Request, archived bool) 
 		order = storage.OrderOldestFirst
 	}
 
-	links, err := ui.store.List(order, archived)
+	var selectedTags []string
+	if tagsParam := r.URL.Query().Get("tags"); tagsParam != "" {
+		selectedTags = strings.Split(tagsParam, ",")
+	}
+	if tagParams := r.URL.Query()["tag"]; len(tagParams) > 0 {
+		selectedTags = tagParams
+	}
+
+	links, err := ui.store.List(order, archived, selectedTags)
 	if err != nil {
 		log.Println(err)
 		writeServerError(w, "failed to load links")
 		return
 	}
 
+	allTags := make(map[string]bool)
 	view := make([]linkView, 0, len(links))
 	for _, link := range links {
 		v := linkView{
@@ -242,6 +295,13 @@ func (ui *UI) renderList(w http.ResponseWriter, r *http.Request, archived bool) 
 			Title:    link.Title,
 			Archived: link.Archived,
 			DaysAgo:  formatDaysAgo(ui.now().UTC(), link.CreatedAt),
+			Tags:     link.Tags,
+		}
+		if len(link.Tags) > 0 {
+			v.TagsDisplay = strings.Join(link.Tags, ", ")
+			for _, t := range link.Tags {
+				allTags[t] = true
+			}
 		}
 		if link.RevisitAt != nil {
 			v.RevisitAt = link.RevisitAt
@@ -257,16 +317,33 @@ func (ui *UI) renderList(w http.ResponseWriter, r *http.Request, archived bool) 
 		toggle = "newest"
 	}
 
+	sortedTags := make([]string, 0, len(allTags))
+	for t := range allTags {
+		sortedTags = append(sortedTags, t)
+	}
+	sort.Strings(sortedTags)
+
+	filterURL := buildFilterURL(archived, order, selectedTags)
+
 	data := pageData{
 		IsArchive:      archived,
 		Links:          view,
 		OrderLabel:     label,
-		ToggleOrderURL: buildOrderURL(archived, toggle),
+		ToggleOrderURL: buildOrderURLWithTags(archived, toggle, selectedTags),
 		Count:          len(view),
+		AllTags:        sortedTags,
+		SelectedTags:   selectedTags,
+		FilterURL:      filterURL,
 	}
 
 	var buf bytes.Buffer
-	if err := ui.tpl.ExecuteTemplate(&buf, "layout", data); err != nil {
+	var templateName string
+	if isHTMX(r) {
+		templateName = "links-list"
+	} else {
+		templateName = "layout"
+	}
+	if err := ui.tpl.ExecuteTemplate(&buf, templateName, data); err != nil {
 		log.Println(err)
 		writeServerError(w, "failed to render page")
 		return
@@ -285,6 +362,10 @@ func (ui *UI) renderItem(w http.ResponseWriter, link storage.Link, edit bool) {
 		Title:    link.Title,
 		Archived: link.Archived,
 		DaysAgo:  formatDaysAgo(now, link.CreatedAt),
+		Tags:     link.Tags,
+	}
+	if len(link.Tags) > 0 {
+		view.TagsDisplay = strings.Join(link.Tags, ", ")
 	}
 	if link.RevisitAt != nil {
 		view.RevisitAt = link.RevisitAt
@@ -298,6 +379,36 @@ func (ui *UI) renderItem(w http.ResponseWriter, link storage.Link, edit bool) {
 
 	var buf bytes.Buffer
 	if err := ui.tpl.ExecuteTemplate(&buf, templateName, view); err != nil {
+		log.Println(err)
+		writeServerError(w, "failed to render item")
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = w.Write(buf.Bytes())
+}
+
+// renderItemTagsEdit renders the tags edit form for a link.
+func (ui *UI) renderItemTagsEdit(w http.ResponseWriter, link storage.Link) {
+	now := ui.now().UTC()
+	view := linkView{
+		ID:       link.ID,
+		URL:      link.URL,
+		Title:    link.Title,
+		Archived: link.Archived,
+		DaysAgo:  formatDaysAgo(now, link.CreatedAt),
+		Tags:     link.Tags,
+	}
+	if len(link.Tags) > 0 {
+		view.TagsDisplay = strings.Join(link.Tags, ", ")
+	}
+	if link.RevisitAt != nil {
+		view.RevisitAt = link.RevisitAt
+		view.DaysUntilRevisit = formatDaysUntil(now, *link.RevisitAt)
+	}
+
+	var buf bytes.Buffer
+	if err := ui.tpl.ExecuteTemplate(&buf, "item-tags-edit", view); err != nil {
 		log.Println(err)
 		writeServerError(w, "failed to render item")
 		return
@@ -362,6 +473,61 @@ func buildOrderURL(archived bool, order string) string {
 		base = "/archive"
 	}
 	return base + "?order=" + order
+}
+
+// buildOrderURLWithTags builds the URL for the order toggle link with tags.
+func buildOrderURLWithTags(archived bool, order string, tags []string) string {
+	base := "/"
+	if archived {
+		base = "/archive"
+	}
+	params := url.Values{}
+	params.Set("order", order)
+	if len(tags) > 0 {
+		params.Set("tags", strings.Join(tags, ","))
+	}
+	return base + "?" + params.Encode()
+}
+
+// buildFilterURL builds the URL for the filter action.
+func buildFilterURL(archived bool, order storage.Order, tags []string) string {
+	base := "/"
+	if archived {
+		base = "/archive"
+	}
+	params := url.Values{}
+	if order == storage.OrderOldestFirst {
+		params.Set("order", "oldest")
+	}
+	if len(tags) > 0 {
+		params.Set("tags", strings.Join(tags, ","))
+	}
+	if len(params) == 0 {
+		return base
+	}
+	return base + "?" + params.Encode()
+}
+
+// parseTagsInput parses a comma-separated tags string into a slice.
+func parseTagsInput(input string) []string {
+	if input == "" {
+		return nil
+	}
+	parts := strings.Split(input, ",")
+	result := make([]string, 0, len(parts))
+	seen := make(map[string]bool)
+	for _, p := range parts {
+		tag := strings.TrimSpace(p)
+		if tag == "" || seen[tag] {
+			continue
+		}
+		seen[tag] = true
+		result = append(result, tag)
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
 }
 
 // isHTMX reports whether the request originated from HTMX.
